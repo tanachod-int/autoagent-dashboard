@@ -61,11 +61,13 @@ def append_critical_products(sheet_identifier: str, products: list[dict]) -> str
                 
     sheet = spreadsheet.get_worksheet(0)
     
-    # Initialize sheet with headers if empty
+    # Initialize sheet with headers if empty or missing
+    headers = ["Product ID", "Product Name", "Current Stock", "Price", "Logged At"]
     values = sheet.get_all_values()
     if not values:
-        headers = ["Product ID", "Product Name", "Current Stock", "Price", "Logged At"]
         sheet.append_row(headers)
+    elif values[0] != headers:
+        sheet.insert_row(headers, 1)
         
     # Prepare rows
     logged_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
