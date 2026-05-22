@@ -136,7 +136,7 @@ def generate_sql_node(state: AgentState) -> AgentState:
 SQL:"""
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-3.1-flash-lite")
         response = model.generate_content(prompt)
         
         end_time = time.perf_counter()
@@ -279,7 +279,7 @@ def draft_discord_node(state: AgentState) -> AgentState:
 """
 
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-3.1-flash-lite")
         response = model.generate_content(prompt)
         
         end_time = time.perf_counter()
