@@ -181,6 +181,58 @@ def list_workflows(limit: int = 20):
         conn.close()
 
 
+@app.get("/api/agent/metrics")
+def get_workflow_metrics():
+    """
+    Get aggregated performance metrics for agent workflows.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 
+                    COUNT(*)::int as total_runs,
+                    COALESCE(SUM(tokens_used), 0)::int as total_tokens,
+                    COALESCE(AVG(CASE WHEN status != 'failed' AND latency_ms > 0 THEN latency_ms END), 0)::float as avg_latency_ms,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END)::int as completed_runs,
+                    COUNT(CASE WHEN status = 'pending_approval' OR status = 'pending' THEN 1 END)::int as pending_runs,
+                    COUNT(CASE WHEN status = 'failed' THEN 1 END)::int as failed_runs
+                FROM agent_workflows;
+                """
+            )
+            row = cur.fetchone()
+            if not row:
+                return {
+                    "total_runs": 0,
+                    "total_tokens": 0,
+                    "avg_latency_ms": 0.0,
+                    "completed_runs": 0,
+                    "pending_runs": 0,
+                    "failed_runs": 0,
+                    "success_rate": 100.0
+                }
+            
+            total_runs, total_tokens, avg_latency_ms, completed_runs, pending_runs, failed_runs = row
+            
+            divisor = completed_runs + failed_runs
+            success_rate = (completed_runs / divisor * 100.0) if divisor > 0 else 100.0
+            
+            return {
+                "total_runs": total_runs,
+                "total_tokens": total_tokens,
+                "avg_latency_ms": round(avg_latency_ms, 2),
+                "completed_runs": completed_runs,
+                "pending_runs": pending_runs,
+                "failed_runs": failed_runs,
+                "success_rate": round(success_rate, 2)
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch agent metrics: {str(e)}")
+    finally:
+        conn.close()
+
+
 @app.get("/api/agent/workflows/{workflow_id}")
 def get_workflow_details(workflow_id: int):
     """
