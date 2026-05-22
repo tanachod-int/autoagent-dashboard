@@ -1,0 +1,77 @@
+# ===========================
+# AutoAgent-Dashboard .gitignore
+# ===========================
+
+# ----- Secrets & Credentials -----
+backend/secrets/
+*.pem
+*.key
+
+# ----- Environment Files -----
+.env
+.env.*
+!.env.example
+
+# ----- Plans (AI prompts & skills) -----
+plans/
+
+# ----- Python / Backend -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ----- Node.js / Frontend -----
+node_modules/
+.next/
+out/
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ----- JSON files (protect service account keys etc.) -----
+# Block all .json EXCEPT project config files
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.*.json
+!next.config.json
+!postcss.config.json
+!components.json
+
+# ----- IDE & Editor -----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ----- OS Files -----
+.DS_Store
+ehthumbs.db
+
+# ----- Testing & Coverage -----
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.nyc_output/
+
+# ----- Build Artifacts -----
+*.log
+*.tmp
+*.temp
