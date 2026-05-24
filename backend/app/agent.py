@@ -259,23 +259,35 @@ def draft_discord_node(state: AgentState) -> AgentState:
     print("[Agent] Drafting Discord Embed notification card...")
     start_time = time.perf_counter()
 
-    products_list_str = "\n".join([
-        f"- {p.get('name')}: คงเหลือ {p.get('stock_quantity')} ชิ้น (ราคา: {p.get('price')} บาท)"
-        for p in state["query_results"] if "name" in p
-    ])
+    # Format results dynamically
+    if not state["query_results"]:
+        data_str = "ไม่พบข้อมูล"
+    else:
+        lines = []
+        for row in state["query_results"][:50]: # Limit to 50 rows
+            row_str = ", ".join([f"{k}: {v}" for k, v in row.items()])
+            lines.append(f"- {row_str}")
+        data_str = "\n".join(lines)
 
     prompt = f"""คุณคือ Discord Agent ผู้เชี่ยวชาญด้านการจัดฟอร์แมตรายงาน
-หน้าที่ของคุณคือสรุปข้อมูลสินค้าวิกฤตที่ตรวจพบเพื่อเตรียมส่งไปแสดงผลบน Discord Embed
+หน้าที่ของคุณคือสรุปข้อมูลจากการสืบค้นฐานข้อมูล เพื่อเตรียมส่งไปแสดงผลบน Discord Embed
 
-นี่คือรายการสินค้าวิกฤตที่ตรวจพบ:
-{products_list_str}
+คำถามของผู้ใช้: "{state['query']}"
 
-นี่คือลิงก์ Google Sheets ที่บันทึกรายงานไว้: {state['sheet_url']}
+นี่คือข้อมูลที่ได้จากการสืบค้น:
+{data_str}
+
+นี่คือลิงก์ Google Sheets ที่บันทึกรายงานไว้ (หากมีการบันทึก): {state['sheet_url']}
 
 กฎการทำงาน:
-- ให้สรุปข้อความภาษาไทยให้สั้นกระชับ ชัดเจน น่าสนใจ และเรียบร้อย
-- ตอบกลับเฉพาะข้อความสรุปที่จะใช้เป็น Description ใน Discord Embed เท่านั้น ห้ามเขียนคำพูดเกริ่นนำ หรือทักทายใดๆ เด็ดขาด
-- หากมีสินค้าจำนวนมาก ให้บอกสรุปภาพรวม
+- ให้สรุปข้อความภาษาไทยให้สั้นกระชับ ชัดเจน น่าสนใจ เพื่อตอบคำถามของผู้ใช้
+- ให้ตอบกลับเป็นรูปแบบ JSON เท่านั้น โดยมีโครงสร้างดังนี้:
+{{
+    "title": "หัวข้อรายงานที่เหมาะสมกับคำถาม (เช่น 📦 รายการสินค้าทั้งหมด, 🚨 รายงานสินค้าคงคลังวิกฤต, 📈 ยอดขาย เป็นต้น)",
+    "description": "ข้อความสรุปที่จะใช้เป็น Description ใน Discord Embed"
+}}
+- ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown block (เช่น ```json) ครอบ
+- หากไม่มีข้อมูลเลย ให้สรุปว่าไม่พบข้อมูลตามที่ผู้ใช้ต้องการ
 """
 
     try:
@@ -289,15 +301,25 @@ def draft_discord_node(state: AgentState) -> AgentState:
         if response.usage_metadata:
             tokens = response.usage_metadata.total_token_count
             
-        summary_desc = response.text.strip()
+        summary_text = response.text.strip()
+        if summary_text.startswith("```"):
+            summary_text = summary_text.replace("```json", "").replace("```", "").strip()
+            
+        try:
+            parsed_summary = json.loads(summary_text)
+            title = parsed_summary.get("title", "📊 รายงานข้อมูล (Data Report)")
+            summary_desc = parsed_summary.get("description", str(parsed_summary))
+        except:
+            title = "📊 รายงานข้อมูล (Data Report)"
+            summary_desc = summary_text
         
         # Build Discord payload
         embed_payload = {
             "embeds": [
                 {
-                    "title": "🚨 รายงานสินค้าคงคลังวิกฤต (Low Stock Report)",
+                    "title": title,
                     "description": summary_desc,
-                    "color": 15158332, # Red Hex code in decimal
+                    "color": 3447003, # Blue Hex code
                     "fields": [
                         {
                             "name": "📊 Google Sheets Link",

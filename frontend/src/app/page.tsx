@@ -74,6 +74,7 @@ interface Metrics {
   completed_runs: number;
   pending_runs: number;
   failed_runs: number;
+  rejected_runs: number;
   success_rate: number;
 }
 
@@ -85,6 +86,7 @@ export default function Dashboard() {
   // States
   const [isLoading, setIsLoading] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [activeWorkflow, setActiveWorkflow] = useState<Workflow | null>(null);
   const [serverHealth, setServerHealth] = useState<"connected" | "disconnected" | "checking">("checking");
@@ -236,6 +238,37 @@ export default function Dashboard() {
       setErrorMsg(msg);
     } finally {
       setIsApproving(false);
+    }
+  };
+
+  // Reject and cancel workflow
+  const handleReject = async () => {
+    if (!activeWorkflow) return;
+    setIsRejecting(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/agent/reject/${activeWorkflow.id}`, {
+        method: "POST"
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Failed to reject workflow");
+      }
+
+      setSuccessMsg("Notification rejected and workflow cancelled.");
+      
+      // Refresh workflow data
+      await fetchWorkflows();
+      await fetchMetrics();
+      await fetchWorkflowDetail(activeWorkflow.id);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Rejection failed.";
+      setErrorMsg(msg);
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -452,9 +485,10 @@ export default function Dashboard() {
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
                               wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
                               wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
+                              wf.status === "rejected" ? "bg-slate-500/10 text-slate-400 border border-slate-500/20" :
                               "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                             }`}>
-                              {wf.status === "pending_approval" ? "Pending Approval" : wf.status}
+                              {wf.status === "pending_approval" ? "Pending Approval" : wf.status === "rejected" ? "Rejected" : wf.status}
                             </span>
                           </div>
                           
@@ -601,9 +635,10 @@ export default function Dashboard() {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                           activeWorkflow.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
                           activeWorkflow.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
+                          activeWorkflow.status === "rejected" ? "bg-slate-500/10 text-slate-450 border border-slate-500/20" :
                           "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                         }`}>
-                          {activeWorkflow.status}
+                          {activeWorkflow.status === "pending_approval" ? "Pending Approval" : activeWorkflow.status}
                         </span>
                       </div>
                     </div>
@@ -736,7 +771,10 @@ export default function Dashboard() {
                       </div>
 
                       {/* Real Discord Embed Styling */}
-                      <div className="bg-[#2f3136] rounded-md p-4 text-left font-sans shadow-lg max-w-[600px] w-full border-l-4 border-[#ff4747]">
+                      <div 
+                        className="bg-[#2f3136] rounded-md p-4 text-left font-sans shadow-lg max-w-[600px] w-full border-l-4"
+                        style={{ borderLeftColor: discordEmbed.embeds?.[0]?.color ? `#${discordEmbed.embeds[0].color.toString(16).padStart(6, '0')}` : '#ff4747' }}
+                      >
                         {discordEmbed.embeds && discordEmbed.embeds[0] && (
                           <div className="flex flex-col gap-2.5">
                             <div className="text-sm font-bold text-white hover:underline cursor-pointer">
@@ -783,27 +821,51 @@ export default function Dashboard() {
                       {/* Human-in-the-Loop Actions */}
                       <div className="flex items-center justify-end gap-3 mt-2">
                         {activeWorkflow.status === "pending_approval" ? (
-                          <button
-                            onClick={handleApprove}
-                            disabled={isApproving}
-                            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-sm rounded-xl transition flex items-center gap-2 hover:shadow-lg hover:shadow-emerald-500/20"
-                          >
-                            {isApproving ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Dispatching...
-                              </>
-                            ) : (
-                              <>
-                                <Check className="w-4 h-4 font-extrabold" />
-                                Approve & Send to Discord
-                              </>
-                            )}
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={handleReject}
+                              disabled={isRejecting || isApproving}
+                              className="px-6 py-3 bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-slate-300 hover:text-white font-semibold text-sm rounded-xl transition flex items-center gap-2 border border-slate-750"
+                            >
+                              {isRejecting ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Rejecting...
+                                </>
+                              ) : (
+                                <>
+                                  <AlertCircle className="w-4 h-4 text-slate-400" />
+                                  Reject & Cancel
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={handleApprove}
+                              disabled={isApproving || isRejecting}
+                              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-sm rounded-xl transition flex items-center gap-2 hover:shadow-lg hover:shadow-emerald-500/20"
+                            >
+                              {isApproving ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Dispatching...
+                                </>
+                              ) : (
+                                <>
+                                  <Check className="w-4 h-4 font-extrabold" />
+                                  Approve & Send to Discord
+                                </>
+                              )}
+                            </button>
+                          </div>
                         ) : activeWorkflow.status === "completed" ? (
                           <div className="px-5 py-2.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl text-emerald-400 text-xs font-bold flex items-center gap-1.5">
                             <CheckCircle2 className="w-4 h-4" />
                             Approved & Sent to Discord Channel
+                          </div>
+                        ) : activeWorkflow.status === "rejected" ? (
+                          <div className="px-5 py-2.5 bg-slate-500/10 border border-slate-500/25 rounded-xl text-slate-400 text-xs font-bold flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4" />
+                            Workflow rejected & cancelled
                           </div>
                         ) : (
                           <div className="px-5 py-2.5 bg-rose-500/10 border border-rose-500/25 rounded-xl text-rose-400 text-xs font-bold flex items-center gap-1.5">
@@ -904,7 +966,7 @@ export default function Dashboard() {
                     {metrics ? `${metrics.success_rate}%` : "100%"}
                   </span>
                   <span className="text-[10px] text-slate-405 mt-0.5">
-                    {metrics ? `${metrics.completed_runs} of ${metrics.completed_runs + metrics.failed_runs} runs` : "0 of 0 runs"}
+                    {metrics ? `${metrics.completed_runs} of ${metrics.completed_runs + metrics.failed_runs + metrics.rejected_runs} runs` : "0 of 0 runs"}
                   </span>
                 </div>
                 <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 z-10 border border-amber-500/15">
@@ -943,7 +1005,7 @@ export default function Dashboard() {
                       />
                       
                       {(() => {
-                        const total = (metrics?.completed_runs || 0) + (metrics?.pending_runs || 0) + (metrics?.failed_runs || 0);
+                        const total = (metrics?.completed_runs || 0) + (metrics?.pending_runs || 0) + (metrics?.failed_runs || 0) + (metrics?.rejected_runs || 0);
                         if (total === 0) {
                           return (
                             <circle
@@ -962,10 +1024,12 @@ export default function Dashboard() {
                         const c_pct = (metrics?.completed_runs || 0) / total;
                         const p_pct = (metrics?.pending_runs || 0) / total;
                         const f_pct = (metrics?.failed_runs || 0) / total;
+                        const r_pct = (metrics?.rejected_runs || 0) / total;
                         
                         const c_len = circ * c_pct;
                         const p_len = circ * p_pct;
                         const f_len = circ * f_pct;
+                        const r_len = circ * r_pct;
                         
                         return (
                           <>
@@ -1013,6 +1077,21 @@ export default function Dashboard() {
                                 filter="url(#donutGlow)"
                               />
                             )}
+
+                            {/* Rejected Segment (Slate) */}
+                            {r_len > 0 && (
+                              <circle
+                                cx="60"
+                                cy="60"
+                                r="50"
+                                fill="transparent"
+                                stroke="#64748b"
+                                strokeWidth="10"
+                                strokeDasharray={`${r_len} ${circ}`}
+                                strokeDashoffset={-(c_len + p_len + f_len)}
+                                filter="url(#donutGlow)"
+                              />
+                            )}
                           </>
                         );
                       })()}
@@ -1028,7 +1107,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* Legends */}
-                  <div className="grid grid-cols-3 gap-2 w-full mt-2 text-[11px]">
+                  <div className="grid grid-cols-4 gap-1 w-full mt-2 text-[11px]">
                     <div className="flex flex-col items-center gap-1">
                       <div className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -1049,6 +1128,13 @@ export default function Dashboard() {
                         <span className="font-semibold text-slate-300">Failed</span>
                       </div>
                       <span className="font-mono text-slate-500">{metrics?.failed_runs || 0} runs</span>
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-slate-500" />
+                        <span className="font-semibold text-slate-300">Rejected</span>
+                      </div>
+                      <span className="font-mono text-slate-500">{metrics?.rejected_runs || 0} runs</span>
                     </div>
                   </div>
                 </div>

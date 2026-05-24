@@ -146,6 +146,35 @@ def approve_workflow(workflow_id: int):
         conn.close()
 
 
+@app.post("/api/agent/reject/{workflow_id}")
+def reject_workflow(workflow_id: int):
+    """
+    Reject the drafted notification and cancel the workflow.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            # Check workflow status
+            cur.execute("SELECT status, tokens_used, latency_ms FROM agent_workflows WHERE id = %s;", (workflow_id,))
+            wf = cur.fetchone()
+            if not wf:
+                raise HTTPException(status_code=404, detail="Workflow not found")
+                
+            status, tokens, latency = wf
+            if status in ["completed", "failed", "rejected"]:
+                return {"message": f"Workflow is already in '{status}' status"}
+                
+        # Update workflow status to rejected
+        db_update_workflow(workflow_id, "rejected", tokens, latency)
+        return {"success": True, "message": "Workflow successfully rejected"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing rejection: {str(e)}")
+    finally:
+        conn.close()
+
+
 @app.get("/api/agent/workflows")
 def list_workflows(limit: int = 20):
     """
@@ -194,10 +223,11 @@ def get_workflow_metrics():
                 SELECT 
                     COUNT(*)::int as total_runs,
                     COALESCE(SUM(tokens_used), 0)::int as total_tokens,
-                    COALESCE(AVG(CASE WHEN status != 'failed' AND latency_ms > 0 THEN latency_ms END), 0)::float as avg_latency_ms,
+                    COALESCE(AVG(CASE WHEN status NOT IN ('failed', 'rejected') AND latency_ms > 0 THEN latency_ms END), 0)::float as avg_latency_ms,
                     COUNT(CASE WHEN status = 'completed' THEN 1 END)::int as completed_runs,
                     COUNT(CASE WHEN status = 'pending_approval' OR status = 'pending' THEN 1 END)::int as pending_runs,
-                    COUNT(CASE WHEN status = 'failed' THEN 1 END)::int as failed_runs
+                    COUNT(CASE WHEN status = 'failed' THEN 1 END)::int as failed_runs,
+                    COUNT(CASE WHEN status = 'rejected' THEN 1 END)::int as rejected_runs
                 FROM agent_workflows;
                 """
             )
@@ -210,12 +240,13 @@ def get_workflow_metrics():
                     "completed_runs": 0,
                     "pending_runs": 0,
                     "failed_runs": 0,
+                    "rejected_runs": 0,
                     "success_rate": 100.0
                 }
             
-            total_runs, total_tokens, avg_latency_ms, completed_runs, pending_runs, failed_runs = row
+            total_runs, total_tokens, avg_latency_ms, completed_runs, pending_runs, failed_runs, rejected_runs = row
             
-            divisor = completed_runs + failed_runs
+            divisor = completed_runs + failed_runs + rejected_runs
             success_rate = (completed_runs / divisor * 100.0) if divisor > 0 else 100.0
             
             return {
@@ -225,6 +256,7 @@ def get_workflow_metrics():
                 "completed_runs": completed_runs,
                 "pending_runs": pending_runs,
                 "failed_runs": failed_runs,
+                "rejected_runs": rejected_runs,
                 "success_rate": round(success_rate, 2)
             }
     except Exception as e:
