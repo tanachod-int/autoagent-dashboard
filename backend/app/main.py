@@ -179,6 +179,41 @@ def reject_workflow(workflow_id: int):
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing rejection: {str(e)}")
+@app.delete("/api/agent/workflows/{workflow_id}")
+def delete_workflow(workflow_id: int):
+    """
+    Delete a specific workflow and its steps.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM agent_workflows WHERE id = %s RETURNING id;", (workflow_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Workflow not found")
+        conn.commit()
+        return {"success": True, "message": f"Workflow #{workflow_id} successfully deleted"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete workflow: {str(e)}")
+    finally:
+        conn.close()
+
+
+@app.delete("/api/agent/workflows")
+def clear_all_workflows():
+    """
+    Delete all workflows.
+    """
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM agent_workflows;")
+        conn.commit()
+        return {"success": True, "message": "All workflows successfully deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear workflows: {str(e)}")
     finally:
         conn.close()
 

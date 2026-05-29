@@ -35,17 +35,17 @@ def seed_data():
             print("Clearing existing data...")
             cur.execute("TRUNCATE TABLE products CASCADE;")
             
-            # 3. Seed products (include some critical stock items with stock < 10)
+            # 3. Seed products
             mock_products = [
                 ("Smartphone X", 50, 15900.00),
-                ("Premium Laptop Pro", 5, 45000.00),          # CRITICAL (stock < 10)
+                ("Premium Laptop Pro", 5, 45000.00),
                 ("Ultra-wide Monitor 34\"", 12, 14900.00),
-                ("Tablet Air 10\"", 3, 12500.00),             # CRITICAL (stock < 10)
-                ("Bluetooth Earbuds", 8, 1990.00),            # CRITICAL (stock < 10)
+                ("Tablet Air 10\"", 3, 12500.00),
+                ("Bluetooth Earbuds", 8, 1990.00),
                 ("High-capacity Power Bank", 120, 890.00),
-                ("Smart Fitness Watch", 2, 5900.00),          # CRITICAL (stock < 10)
+                ("Smart Fitness Watch", 2, 5900.00),
                 ("Mechanical Keyboard", 15, 3200.00),
-                ("USB-C Hub Multiport", 9, 1290.00),          # CRITICAL (stock < 10)
+                ("USB-C Hub Multiport", 9, 1290.00),
                 ("Wireless Mouse", 25, 990.00)
             ]
             
@@ -78,7 +78,15 @@ def seed_data():
                 for _ in range(num_sales):
                     # Random date in the last 14 days
                     days_ago = random.randint(0, 14)
-                    sale_date = datetime.now() - timedelta(days=days_ago, hours=random.randint(0, 23))
+                    hours_ago = random.randint(0, 23)
+                    minutes_ago = random.randint(0, 59)
+                    seconds_ago = random.randint(0, 59)
+                    sale_date = datetime.now() - timedelta(
+                        days=days_ago,
+                        hours=hours_ago,
+                        minutes=minutes_ago,
+                        seconds=seconds_ago
+                    )
                     
                     # Random purchase amount (usually quantity * price, e.g. 1-3 items)
                     quantity = random.randint(1, 3)

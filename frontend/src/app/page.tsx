@@ -18,7 +18,8 @@ import {
   Coins,
   History,
   Check,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from "lucide-react";
 
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -61,12 +62,6 @@ interface DiscordEmbed {
   embeds?: DiscordEmbedContent[];
 }
 
-interface ProductItem {
-  id: number;
-  name: string;
-  stock_quantity: number;
-  price: number;
-}
 
 interface Metrics {
   total_runs: number;
@@ -277,6 +272,66 @@ export default function Dashboard() {
     }
   };
 
+  // Delete a specific workflow
+  const handleDeleteWorkflow = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete Workflow #${id}?`)) return;
+
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/agent/workflows/${id}`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Failed to delete workflow");
+      }
+
+      setSuccessMsg(`Workflow #${id} successfully deleted.`);
+      
+      if (activeWorkflow?.id === id) {
+        setActiveWorkflow(null);
+      }
+
+      await fetchWorkflows();
+      await fetchMetrics();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Deletion failed.";
+      setErrorMsg(msg);
+    }
+  };
+
+  // Clear all workflows
+  const handleClearAllWorkflows = async () => {
+    if (!confirm("Are you sure you want to delete ALL workflows history? This cannot be undone.")) return;
+
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/agent/workflows`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Failed to clear workflows");
+      }
+
+      setSuccessMsg("All workflows successfully deleted.");
+      setActiveWorkflow(null);
+
+      await fetchWorkflows();
+      await fetchMetrics();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to clear all workflows.";
+      setErrorMsg(msg);
+    }
+  };
+
   // Extract variables for presentation
   const generateStep = activeWorkflow?.steps?.find(s => s.step_name === "generate_sql");
   const executeStep = activeWorkflow?.steps?.find(s => s.step_name === "execute_sql");
@@ -293,25 +348,34 @@ export default function Dashboard() {
     }
   }
 
-  // Parse products from raw execution results in state if available
-  const productsList: ProductItem[] = [];
-  if (discordEmbed && discordEmbed.embeds && discordEmbed.embeds[0]) {
-    const desc = discordEmbed.embeds[0].description || "";
-    // extract items like "* **Premium Laptop Pro**: เหลือ 5 ชิ้น"
-    const lines = desc.split("\n");
-    lines.forEach((line: string, index: number) => {
-      if (line.startsWith("* ")) {
-        const match = line.match(/\*\*(.*?)\*\*:\s*เหลือ\s*(\d+)\s*ชิ้น/);
-        if (match) {
-          productsList.push({
-            id: index + 1,
-            name: match[1],
-            stock_quantity: parseInt(match[2]),
-            price: match[1] === "Premium Laptop Pro" ? 45000 : match[1] === "Tablet Air 10\"" ? 12500 : 0
-          });
-        }
+  // Dynamic SQL query results parser
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let queryResults: any[] = [];
+  if (executeStep?.execution_result) {
+    try {
+      const parsed = JSON.parse(executeStep.execution_result);
+      if (Array.isArray(parsed)) {
+        queryResults = parsed;
       }
-    });
+    } catch {
+      // Legacy parser fallback: parse from Discord embed description markdown if it exists
+      if (discordEmbed && discordEmbed.embeds && discordEmbed.embeds[0]) {
+        const desc = discordEmbed.embeds[0].description || "";
+        const lines = desc.split("\n");
+        lines.forEach((line: string) => {
+          if (line.startsWith("* ")) {
+            const match = line.match(/\*\*(.*?)\*\*:\s*เหลือ\s*(\d+)\s*ชิ้น/);
+            if (match) {
+              queryResults.push({
+                product_name: match[1],
+                stock_quantity: parseInt(match[2]),
+                price: match[1] === "Premium Laptop Pro" ? 45000 : match[1] === "Tablet Air 10\"" ? 12500 : 0
+              });
+            }
+          }
+        });
+      }
+    }
   }
 
   return (
@@ -437,10 +501,32 @@ export default function Dashboard() {
                   <span className="text-xs text-slate-500 font-medium text-left">Quick Prompts:</span>
                   <div className="flex flex-wrap gap-2">
                     <button
+                      type="button"
                       onClick={() => setQuery("หาสินค้าคงคลังที่เหลือน้อยกว่า 10 ชิ้นแล้วรายงานลง Google Sheets")}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-850 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition font-medium text-left"
+                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
                     >
                       🔍 หาสินค้าวิกฤต (Stock &lt; 10)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuery("สรุปยอดขายรวมของสินค้าแต่ละรายการแล้วรายงานลง Google Sheets")}
+                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
+                    >
+                      📊 ยอดขายรายสินค้า (Total Sales)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuery("ดึงรายการประวัติการขาย 7 วันล่าสุดพร้อมชื่อสินค้าและยอดเงิน")}
+                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
+                    >
+                      📅 ประวัติการขาย 7 วันล่าสุด
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuery("หาสินค้าที่มีราคาสูงกว่า 10000 บาทแล้วรายงานลง Google Sheets")}
+                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
+                    >
+                      💰 สินค้าราคาพรีเมียม (&gt; 10,000)
                     </button>
                   </div>
                 </div>
@@ -453,12 +539,24 @@ export default function Dashboard() {
                     <History className="w-5 h-5" />
                     <h3 className="font-semibold text-base text-slate-100">Workflow Execution Logs</h3>
                   </div>
-                  <button
-                    onClick={() => fetchWorkflows(false)}
-                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
-                  >
-                    Refresh
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {workflows.length > 0 && (
+                      <button
+                        onClick={handleClearAllWorkflows}
+                        className="text-xs text-rose-450 hover:text-rose-400 font-semibold flex items-center gap-1 transition-all"
+                        title="Delete all workflows history"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Clear All
+                      </button>
+                    )}
+                    <button
+                      onClick={() => fetchWorkflows(false)}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 </div>
 
                 <div className="overflow-y-auto flex-1 flex flex-col gap-2.5 pr-2">
@@ -479,10 +577,20 @@ export default function Dashboard() {
                             }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-bold text-slate-500 font-mono">
-                              ID: #{wf.id}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-500 font-mono">
+                                ID: #{wf.id}
+                              </span>
+                              <button
+                                onClick={(e) => handleDeleteWorkflow(wf.id, e)}
+                                className="text-slate-500 hover:text-rose-400 transition p-0.5 rounded hover:bg-slate-800/80"
+                                title={`Delete Workflow #${wf.id}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                                wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
                                 wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
                                   wf.status === "rejected" ? "bg-slate-500/10 text-slate-400 border border-slate-500/20" :
                                     "bg-rose-500/10 text-rose-400 border border-rose-500/20"
@@ -687,9 +795,6 @@ export default function Dashboard() {
                     {activeTab === "pipeline" && (
                       <div className="flex flex-col gap-3">
                         <div className="bg-slate-950 rounded-xl p-4 border border-slate-850 font-mono text-xs overflow-x-auto relative">
-                          <div className="absolute right-3 top-3 text-[10px] text-slate-600 select-none uppercase font-bold tracking-wider">
-                            PostgreSQL
-                          </div>
                           <code className="text-emerald-400 block whitespace-pre text-left">
                             {generateStep?.sql_generated || "-- No SQL statement generated --"}
                           </code>
@@ -704,46 +809,79 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {/* Tab 2: Products Table */}
+                    {/* Tab 2: Dynamic Data Inspector Table */}
                     {activeTab === "data" && (
                       <div className="overflow-x-auto max-h-[300px] border border-slate-900 rounded-xl bg-slate-950">
-                        {productsList.length === 0 ? (
+                        {queryResults.length === 0 ? (
                           <div className="text-center py-8 text-slate-500 text-xs">
-                            No product data returned by execution.
+                            No query database results found in this execution step.
                           </div>
                         ) : (
-                          <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 border-b border-slate-900">
-                              <tr>
-                                <th className="px-4 py-3">Product Name</th>
-                                <th className="px-4 py-3 text-center">Remaining Stock</th>
-                                <th className="px-4 py-3 text-right">Price (THB)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {productsList.map((prod, index) => (
-                                <tr
-                                  key={index}
-                                  className="border-b border-slate-900 hover:bg-slate-900/20 text-xs font-medium"
-                                >
-                                  <td className="px-4 py-3 font-semibold text-slate-200 text-left">
-                                    {prod.name}
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    <span className={`px-2 py-0.5 rounded font-mono font-bold ${prod.stock_quantity <= 5
-                                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/25"
-                                        : "bg-amber-500/10 text-amber-400 border border-amber-500/25"
-                                      }`}>
-                                      {prod.stock_quantity}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3 text-right font-mono text-slate-300">
-                                    {prod.price.toLocaleString()}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          (() => {
+                            const columns = Object.keys(queryResults[0]);
+                            return (
+                              <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 border-b border-slate-900 sticky top-0 backdrop-blur-md">
+                                  <tr>
+                                    {columns.map((col) => (
+                                      <th key={col} className="px-4 py-3 capitalize font-semibold tracking-wider">
+                                        {col.replace(/_/g, " ")}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {queryResults.map((row, rowIndex) => (
+                                    <tr
+                                      key={rowIndex}
+                                      className="border-b border-slate-900 hover:bg-slate-900/10 text-xs transition"
+                                    >
+                                      {columns.map((col) => {
+                                        const val = row[col];
+                                        let displayVal = String(val === null || val === undefined ? "-" : val);
+                                        
+                                        // Dynamic Formatting
+                                        const isNumber = typeof val === "number" || (!isNaN(Number(val)) && val !== "");
+                                        const isDate = col.includes("date") || col.includes("time") || col.includes("_at");
+
+                                        if (isDate && val) {
+                                          try {
+                                            displayVal = new Date(val).toLocaleString([], {
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                              second: '2-digit',
+                                              day: '2-digit',
+                                              month: '2-digit',
+                                              year: 'numeric'
+                                            });
+                                          } catch {
+                                            // ignore
+                                          }
+                                        } else if (isNumber && typeof val === "number") {
+                                          displayVal = val.toLocaleString();
+                                        }
+
+                                        return (
+                                          <td key={col} className="px-4 py-3 text-left font-medium text-slate-300">
+                                            {col === "stock_quantity" ? (
+                                              <span className={`px-2 py-0.5 rounded font-mono font-bold ${val <= 5
+                                                  ? "bg-rose-500/10 text-rose-400 border border-rose-500/25"
+                                                  : "bg-amber-500/10 text-amber-400 border border-amber-500/25"
+                                                }`}>
+                                                {displayVal}
+                                              </span>
+                                            ) : (
+                                              displayVal
+                                            )}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            );
+                          })()
                         )}
                       </div>
                     )}
@@ -758,7 +896,6 @@ export default function Dashboard() {
                           <MessageSquare className="w-5 h-5" />
                           <h3 className="font-semibold text-lg text-slate-100">Discord Notification Preview</h3>
                         </div>
-                        <span className="text-xs text-slate-400 font-mono">Embed Card Draft</span>
                       </div>
 
                       {/* Real Discord Embed Styling */}
@@ -870,13 +1007,120 @@ export default function Dashboard() {
                   )}
 
                 </div>
+              ) : isLoading ? (
+                // Premium Loader View
+                <div className="bg-slate-900/60 border border-slate-850 rounded-2xl p-8 backdrop-blur-sm flex-1 flex flex-col items-center justify-center text-center min-h-[500px] gap-8 shadow-xl">
+                  {/* Glowing Spinner */}
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-4 border-indigo-500/10 border-t-indigo-500 animate-spin" />
+                    <div className="absolute inset-0 w-16 h-16 rounded-full border border-indigo-500/30 animate-pulse scale-110" />
+                  </div>
+
+                  <div className="flex flex-col gap-2 max-w-md">
+                    <h4 className="font-bold text-lg text-slate-100">
+                      Executing Agent Pipeline...
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      The LangGraph state machine is processing your request. Please wait while the agents collaborate.
+                    </p>
+                  </div>
+
+                  {/* Execution Steps Loader */}
+                  <div className="w-full max-w-md bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold animate-pulse">1</div>
+                      <div className="flex-1">
+                        <h5 className="text-xs font-semibold text-slate-200">Text-to-SQL Translation</h5>
+                        <p className="text-[10px] text-slate-500">Converting natural Thai query into PostgreSQL</p>
+                      </div>
+                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded animate-pulse">Running</span>
+                    </div>
+
+                    <div className="h-px bg-slate-900" />
+
+                    <div className="flex items-center gap-3 opacity-50">
+                      <div className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-bold">2</div>
+                      <div className="flex-1">
+                        <h5 className="text-xs font-semibold text-slate-350">Supabase Execution</h5>
+                        <p className="text-[10px] text-slate-500">Querying live database records</p>
+                      </div>
+                      <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">Pending</span>
+                    </div>
+
+                    <div className="h-px bg-slate-900" />
+
+                    <div className="flex items-center gap-3 opacity-50">
+                      <div className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-bold">3</div>
+                      <div className="flex-1">
+                        <h5 className="text-xs font-semibold text-slate-350">Google Sheets Logging</h5>
+                        <p className="text-[10px] text-slate-500">Appending results to Google Sheet</p>
+                      </div>
+                      <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">Pending</span>
+                    </div>
+
+                    <div className="h-px bg-slate-900" />
+
+                    <div className="flex items-center gap-3 opacity-50">
+                      <div className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-bold">4</div>
+                      <div className="flex-1">
+                        <h5 className="text-xs font-semibold text-slate-350">Discord Webhook Drafting</h5>
+                        <p className="text-[10px] text-slate-500">Preparing rich notification payload</p>
+                      </div>
+                      <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">Pending</span>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <div className="bg-slate-900/60 border border-slate-900 rounded-2xl p-8 backdrop-blur-sm flex-1 flex flex-col items-center justify-center text-center text-slate-500 min-h-[400px]">
-                  <Layers className="w-12 h-12 text-slate-700 mb-3 animate-pulse" />
-                  <h4 className="font-semibold text-slate-300 mb-1">No Active Operations Workflow</h4>
-                  <p className="text-xs max-w-[280px]">
-                    Select a completed run from the logs history or run a new operations agent above.
-                  </p>
+                // Premium Onboarding/Empty State View
+                <div className="bg-slate-900/60 border border-slate-900 rounded-2xl p-8 backdrop-blur-sm flex-1 flex flex-col items-center justify-center text-center min-h-[500px] gap-8 shadow-xl">
+                  <div className="p-4 bg-indigo-600/10 rounded-2xl border border-indigo-500/20 text-indigo-400">
+                    <Layers className="w-10 h-10 animate-pulse" />
+                  </div>
+                  
+                  <div className="flex flex-col gap-2 max-w-sm">
+                    <h4 className="font-bold text-lg text-slate-100">
+                      AutoAgent Control Center
+                    </h4>
+                    <p className="text-xs text-slate-400">
+                      Ready to execute multi-agent workflows. Start by running a query or select an existing execution from the logs history.
+                    </p>
+                  </div>
+
+                  {/* Step Guide Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl text-left mt-2">
+                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl hover:border-slate-800 transition">
+                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
+                        <Play className="w-4 h-4" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Step 1</span>
+                      </div>
+                      <h5 className="text-xs font-bold text-slate-200 mb-1">Trigger Command</h5>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Input a natural Thai request or use a Quick Prompt on the left.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl hover:border-slate-800 transition">
+                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
+                        <Terminal className="w-4 h-4" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Step 2</span>
+                      </div>
+                      <h5 className="text-xs font-bold text-slate-200 mb-1">Verify Pipeline</h5>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Inspect translated SQL, live query results, and generated sheet logs.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl hover:border-slate-800 transition">
+                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
+                        <MessageSquare className="w-4 h-4" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Step 3</span>
+                      </div>
+                      <h5 className="text-xs font-bold text-slate-200 mb-1">Approve & Dispatch</h5>
+                      <p className="text-[10px] text-slate-500 leading-relaxed">
+                        Preview the Discord webhook embed card and click dispatch to approve.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -924,7 +1168,7 @@ export default function Dashboard() {
                 <div className="flex flex-col gap-1 z-10">
                   <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">LLM Tokens Consumed</span>
                   <span className="text-2xl font-black text-slate-100 font-mono">{(metrics?.total_tokens || 0).toLocaleString()}</span>
-                  <span className="text-[10px] text-slate-405 mt-0.5">Gemini 2.5 API volume</span>
+                  <span className="text-[10px] text-slate-405 mt-0.5">Gemini 3.1 Flash Lite API volume</span>
                 </div>
                 <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400 z-10 border border-violet-500/15">
                   <Coins className="w-5 h-5" />
@@ -1311,15 +1555,24 @@ export default function Dashboard() {
                             {wf.tokens_used > 0 ? wf.tokens_used.toLocaleString() : "-"}
                           </td>
                           <td className="px-4 py-3.5 text-center">
-                            <button
-                              onClick={() => {
-                                fetchWorkflowDetail(wf.id);
-                                setCurrentView("sandbox");
-                              }}
-                              className="px-2.5 py-1 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded border border-indigo-500/20 text-[10px] font-bold uppercase transition-all"
-                            >
-                              Inspect Run
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => {
+                                  fetchWorkflowDetail(wf.id);
+                                  setCurrentView("sandbox");
+                                }}
+                                className="px-2.5 py-1 bg-indigo-600/10 hover:bg-indigo-600 text-indigo-400 hover:text-white rounded border border-indigo-500/20 text-[10px] font-bold uppercase transition-all"
+                              >
+                                Inspect Run
+                              </button>
+                              <button
+                                onClick={(e) => handleDeleteWorkflow(wf.id, e)}
+                                className="p-1 bg-rose-600/10 hover:bg-rose-600 text-rose-450 hover:text-white rounded border border-rose-500/20 transition-all"
+                                title={`Delete Run #${wf.id}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}

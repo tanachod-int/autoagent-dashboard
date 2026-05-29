@@ -198,7 +198,7 @@ def execute_sql_node(state: AgentState) -> AgentState:
             state["workflow_id"], 
             "execute_sql", 
             state["sql"], 
-            f"Successfully executed. Found {len(results)} rows.", 
+            json.dumps(results), 
             True
         )
     except Exception as e:
