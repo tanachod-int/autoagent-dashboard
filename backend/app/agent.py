@@ -8,7 +8,7 @@ from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 
 from app.database import get_db_connection
-from app.google_sheets import append_critical_products
+from app.google_sheets import append_data_to_sheet
 
 # Load environment variables from absolute path
 base_dir = os.path.dirname(os.path.dirname(__file__))
@@ -131,6 +131,7 @@ def generate_sql_node(state: AgentState) -> AgentState:
 - ให้ตอบกลับเฉพาะคำสั่ง SQL เท่านั้น ห้ามใส่คำอธิบาย ห้ามใช้ markdown code block (เช่น ```sql ... ```)
 - คำสั่ง SQL ต้องทำงานได้จริงบน PostgreSQL
 - เมื่อผู้ใช้พูดถึง "สินค้าวิกฤต", "สินค้าสต็อกต่ำ", "ของเหลือน้อย", ให้หาตัวที่ stock_quantity < 10
+- หากคำสั่งของผู้ใช้ไม่เกี่ยวข้องกับคลังสินค้าหรือยอดขายในระบบเลย หรือเป็นคำถามชวนคุยทั่วไป ถามความเห็นนอกเรื่อง (เช่น ฟังเพลงอะไรดี, สภาพอากาศ, คุยทั่วไป) ให้ตอบกลับด้วยคำว่า "OUT_OF_SCOPE" เท่านั้น ห้ามเขียน SQL หรืออธิบายใดๆ
 
 คำสั่งผู้ใช้: {state['query']}
 SQL:"""
@@ -152,10 +153,16 @@ SQL:"""
         if sql_code.startswith("```"):
             sql_code = sql_code.replace("```sql", "").replace("```", "").strip()
             
-        state["sql"] = sql_code
         state["total_latency_ms"] += latency
         state["total_tokens"] += tokens
         
+        if "OUT_OF_SCOPE" in sql_code:
+            error_msg = "คำถามของคุณอยู่นอกเหนือขอบเขตข้อมูลคลังสินค้าและยอดขายที่ระบบรองรับ"
+            state["error"] = error_msg
+            db_insert_step(state["workflow_id"], "generate_sql", None, f"Out-of-scope query detected: {state['query']}", False)
+            return state
+            
+        state["sql"] = sql_code
         db_insert_step(state["workflow_id"], "generate_sql", sql_code, "SQL successfully generated", True)
         
     except Exception as e:
@@ -206,40 +213,27 @@ def execute_sql_node(state: AgentState) -> AgentState:
 
 
 def write_sheets_node(state: AgentState) -> AgentState:
-    """Write critical products to Google Sheets."""
+    """Write query results to Google Sheets."""
     if state.get("error"):
         return state
 
     # If no results to write, skip sheets write but log it
     if not state["query_results"]:
-        db_insert_step(state["workflow_id"], "write_sheets", None, "No products to write", True)
+        db_insert_step(state["workflow_id"], "write_sheets", None, "No data to write", True)
         return state
 
     print(f"[Agent] Writing results to Google Sheets: {state['sheet_url']}")
     try:
-        # Filter for products from the query results (expecting lists of products)
-        products_to_log = []
-        for row in state["query_results"]:
-            if "name" in row:
-                products_to_log.append({
-                    "id": row.get("id", "N/A"),
-                    "name": row.get("name"),
-                    "stock_quantity": row.get("stock_quantity", 0),
-                    "price": float(row.get("price", 0.0))
-                })
-        
-        if products_to_log:
-            final_sheet_url = append_critical_products(state["sheet_url"], products_to_log)
-            state["sheet_url"] = final_sheet_url
-            db_insert_step(
-                state["workflow_id"], 
-                "write_sheets", 
-                None, 
-                f"Successfully appended {len(products_to_log)} rows to Google Sheet: {final_sheet_url}", 
-                True
-            )
-        else:
-            db_insert_step(state["workflow_id"], "write_sheets", None, "No valid product structures in result set to write to sheet", True)
+        # Pass raw query results directly to the dynamic sheet logger
+        final_sheet_url = append_data_to_sheet(state["sheet_url"], state["query_results"])
+        state["sheet_url"] = final_sheet_url
+        db_insert_step(
+            state["workflow_id"], 
+            "write_sheets", 
+            None, 
+            f"Successfully appended {len(state['query_results'])} rows to Google Sheet: {final_sheet_url}", 
+            True
+        )
             
     except Exception as e:
         error_msg = f"Google Sheets Write Failed: {str(e)}"
@@ -283,7 +277,7 @@ def draft_discord_node(state: AgentState) -> AgentState:
 - ให้สรุปข้อความภาษาไทยให้สั้นกระชับ ชัดเจน น่าสนใจ เพื่อตอบคำถามของผู้ใช้
 - ให้ตอบกลับเป็นรูปแบบ JSON เท่านั้น โดยมีโครงสร้างดังนี้:
 {{
-    "title": "หัวข้อรายงานที่เหมาะสมกับคำถาม (เช่น 📦 รายการสินค้าทั้งหมด, 🚨 รายงานสินค้าคงคลังวิกฤต, 📈 ยอดขาย เป็นต้น)",
+    "title": "หัวข้อรายงานที่เหมาะสมกับคำถาม (เช่น รายการสินค้าทั้งหมด, รายงานสินค้าคงคลังวิกฤต, ยอดขาย เป็นต้น)",
     "description": "ข้อความสรุปที่จะใช้เป็น Description ใน Discord Embed"
 }}
 - ห้ามมีข้อความอื่นนอกเหนือจาก JSON ห้ามใช้ markdown block (เช่น ```json) ครอบ
