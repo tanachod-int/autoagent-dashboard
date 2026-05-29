@@ -19,11 +19,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS configuration to support Next.js frontend port (default: 3000)
+# CORS configuration to support Next.js frontend port (default: 3000) and production deployment
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    # Support comma-separated URLs in FRONTEND_URL environment variable
+    for url in frontend_url.split(","):
+        cleaned_url = url.strip()
+        if cleaned_url and cleaned_url not in origins:
+            origins.append(cleaned_url)
 
 app.add_middleware(
     CORSMiddleware,
