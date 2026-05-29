@@ -16,16 +16,29 @@ SCOPES = [
 def get_sheets_client() -> gspread.Client:
     """
     Authenticate and return a gspread client.
-    Loads credentials from the file path specified in GOOGLE_APPLICATION_CREDENTIALS.
+    Loads credentials from:
+    1. GOOGLE_SERVICE_ACCOUNT_JSON (JSON string value, preferred for cloud deployments)
+    2. GOOGLE_APPLICATION_CREDENTIALS (file path, fallback for local development)
     """
-    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if not creds_path:
-        raise ValueError("GOOGLE_APPLICATION_CREDENTIALS environment variable is not configured.")
+    import json
+    
+    creds_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+    if creds_json:
+        try:
+            creds_info = json.loads(creds_json)
+            creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+        except Exception as e:
+            raise ValueError(f"Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON environment variable: {str(e)}")
+    else:
+        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not creds_path:
+            raise ValueError("Neither GOOGLE_SERVICE_ACCOUNT_JSON nor GOOGLE_APPLICATION_CREDENTIALS environment variable is configured.")
+            
+        if not os.path.exists(creds_path):
+            raise FileNotFoundError(f"Google credentials file not found at: {creds_path}")
+            
+        creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
         
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError(f"Google credentials file not found at: {creds_path}")
-        
-    creds = Credentials.from_service_account_file(creds_path, scopes=SCOPES)
     client = gspread.authorize(creds)
     return client
 
