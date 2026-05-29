@@ -1,16 +1,15 @@
 "use client";
-// Trigger Vercel redeployment with updated Root Directory
 
 import React, { useState, useEffect, useCallback } from "react";
-import { 
-  Play, 
-  CheckCircle2, 
-  AlertCircle, 
-  Terminal, 
-  Table, 
-  FileSpreadsheet, 
-  MessageSquare, 
-  TrendingUp, 
+import {
+  Play,
+  CheckCircle2,
+  AlertCircle,
+  Terminal,
+  Table,
+  FileSpreadsheet,
+  MessageSquare,
+  TrendingUp,
   Layers,
   Database,
   Send,
@@ -84,7 +83,7 @@ export default function Dashboard() {
   // Inputs
   const [query, setQuery] = useState("หาสินค้าวิกฤตที่เหลือน้อยกว่า 10 ชิ้นแล้วบันทึกลง Google Sheets");
   const [sheetUrl, setSheetUrl] = useState("https://docs.google.com/spreadsheets/d/1KygmZXWBB7cHEixW9ajuafnovvoYNu7-ajjG2aLiJvM");
-  
+
   // States
   const [isLoading, setIsLoading] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
@@ -160,11 +159,11 @@ export default function Dashboard() {
         setServerHealth("disconnected");
       }
     };
-    
+
     checkHealth();
     fetchWorkflows(true);
     fetchMetrics();
-    
+
     // Auto refresh workflows history list and metrics every 15 seconds
     const interval = setInterval(() => {
       fetchWorkflows();
@@ -196,14 +195,18 @@ export default function Dashboard() {
       }
 
       const data = await res.json();
-      setSuccessMsg("Agent pipeline executed successfully!");
-      
+
       // Refresh list and select the newly created workflow
       await fetchWorkflows();
       await fetchMetrics();
       if (data.workflow_id) {
         await fetchWorkflowDetail(data.workflow_id);
       }
+
+      if (data.success === false) {
+        throw new Error(data.error || "Failed to execute agent workflow");
+      }
+      setSuccessMsg("Agent pipeline executed successfully!");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An unexpected error occurred during execution.";
       setErrorMsg(msg);
@@ -230,7 +233,7 @@ export default function Dashboard() {
       }
 
       setSuccessMsg("Notification successfully approved and sent to Discord!");
-      
+
       // Refresh workflow data
       await fetchWorkflows();
       await fetchMetrics();
@@ -261,7 +264,7 @@ export default function Dashboard() {
       }
 
       setSuccessMsg("Notification rejected and workflow cancelled.");
-      
+
       // Refresh workflow data
       await fetchWorkflows();
       await fetchMetrics();
@@ -331,11 +334,10 @@ export default function Dashboard() {
         <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-850 p-1 rounded-xl">
           <button
             onClick={() => setCurrentView("sandbox")}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-              currentView === "sandbox"
+            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${currentView === "sandbox"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             Interactive Sandbox
           </button>
@@ -344,11 +346,10 @@ export default function Dashboard() {
               setCurrentView("monitoring");
               fetchMetrics();
             }}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
-              currentView === "monitoring"
+            className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${currentView === "monitoring"
                 ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/10"
                 : "text-slate-400 hover:text-slate-200"
-            }`}
+              }`}
           >
             Observability Panel
           </button>
@@ -356,10 +357,9 @@ export default function Dashboard() {
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs">
-            <span className={`w-2.5 h-2.5 rounded-full ${
-              serverHealth === "connected" ? "bg-emerald-500 animate-ping" : 
-              serverHealth === "disconnected" ? "bg-rose-500" : "bg-amber-500 animate-pulse"
-            }`} />
+            <span className={`w-2.5 h-2.5 rounded-full ${serverHealth === "connected" ? "bg-emerald-500 animate-ping" :
+                serverHealth === "disconnected" ? "bg-rose-500" : "bg-amber-500 animate-pulse"
+              }`} />
             <span className="text-slate-300 font-medium">
               Backend: {serverHealth === "connected" ? "Connected" : serverHealth === "disconnected" ? "Offline" : "Checking..."}
             </span>
@@ -369,7 +369,7 @@ export default function Dashboard() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-6">
-        
+
         {currentView === "sandbox" ? (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Left Side: Control & Configuration */}
@@ -413,11 +413,10 @@ export default function Dashboard() {
                   <button
                     type="submit"
                     disabled={isLoading || serverHealth !== "connected"}
-                    className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                      isLoading 
-                        ? "bg-indigo-650/50 text-indigo-300 cursor-not-allowed" 
+                    className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${isLoading
+                        ? "bg-indigo-650/50 text-indigo-300 cursor-not-allowed"
                         : "bg-indigo-600 hover:bg-indigo-500 text-white hover:shadow-lg hover:shadow-indigo-500/20 active:scale-[0.98]"
-                    }`}
+                      }`}
                   >
                     {isLoading ? (
                       <>
@@ -454,7 +453,7 @@ export default function Dashboard() {
                     <History className="w-5 h-5" />
                     <h3 className="font-semibold text-base text-slate-100">Workflow Execution Logs</h3>
                   </div>
-                  <button 
+                  <button
                     onClick={() => fetchWorkflows(false)}
                     className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
                   >
@@ -474,26 +473,24 @@ export default function Dashboard() {
                         <div
                           key={wf.id}
                           onClick={() => fetchWorkflowDetail(wf.id)}
-                          className={`p-3.5 rounded-xl border transition cursor-pointer text-left ${
-                            isActive 
-                              ? "bg-slate-800/40 border-indigo-500/50 hover:bg-slate-800/60" 
+                          className={`p-3.5 rounded-xl border transition cursor-pointer text-left ${isActive
+                              ? "bg-slate-800/40 border-indigo-500/50 hover:bg-slate-800/60"
                               : "bg-slate-950 border-slate-900 hover:border-slate-800 hover:bg-slate-950/80"
-                          }`}
+                            }`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-bold text-slate-500 font-mono">
                               ID: #{wf.id}
                             </span>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
-                              wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                              wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
-                              wf.status === "rejected" ? "bg-slate-500/10 text-slate-400 border border-slate-500/20" :
-                              "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                                wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
+                                  wf.status === "rejected" ? "bg-slate-500/10 text-slate-400 border border-slate-500/20" :
+                                    "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                              }`}>
                               {wf.status === "pending_approval" ? "Pending Approval" : wf.status === "rejected" ? "Rejected" : wf.status}
                             </span>
                           </div>
-                          
+
                           <p className="text-sm font-medium text-slate-300 line-clamp-1 mb-2">
                             {wf.task_query}
                           </p>
@@ -537,7 +534,7 @@ export default function Dashboard() {
 
               {activeWorkflow ? (
                 <div className="flex flex-col gap-6">
-                  
+
                   {/* Pipeline Monitor Card */}
                   <div className="bg-slate-900/60 border border-slate-900 rounded-2xl p-6 backdrop-blur-sm flex flex-col gap-5">
                     <div className="flex items-center justify-between">
@@ -550,13 +547,12 @@ export default function Dashboard() {
 
                     {/* Stepper Pipeline */}
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 relative">
-                      
+
                       {/* Step 1: SQL Generation */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${
-                        generateStep?.is_success 
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300" 
+                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${generateStep?.is_success
+                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
                           : "bg-slate-950 border-slate-900 opacity-60"
-                      }`}>
+                        }`}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-slate-500 uppercase">Step 1</span>
                           <Terminal className={`w-4 h-4 ${generateStep?.is_success ? "text-indigo-400" : "text-slate-650"}`} />
@@ -568,11 +564,10 @@ export default function Dashboard() {
                       </div>
 
                       {/* Step 2: DB Execution */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${
-                        executeStep?.is_success 
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300" 
+                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${executeStep?.is_success
+                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
                           : "bg-slate-950 border-slate-900 opacity-60"
-                      }`}>
+                        }`}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-slate-500 uppercase">Step 2</span>
                           <Database className={`w-4 h-4 ${executeStep?.is_success ? "text-indigo-400" : "text-slate-650"}`} />
@@ -584,11 +579,10 @@ export default function Dashboard() {
                       </div>
 
                       {/* Step 3: Google Sheets */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${
-                        sheetsStep?.is_success 
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300" 
+                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${sheetsStep?.is_success
+                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
                           : "bg-slate-950 border-slate-900 opacity-60"
-                      }`}>
+                        }`}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-slate-500 uppercase">Step 3</span>
                           <FileSpreadsheet className={`w-4 h-4 ${sheetsStep?.is_success ? "text-indigo-400" : "text-slate-650"}`} />
@@ -600,11 +594,10 @@ export default function Dashboard() {
                       </div>
 
                       {/* Step 4: Discord Embed Draft */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${
-                        discordStep?.is_success 
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300" 
+                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${discordStep?.is_success
+                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
                           : "bg-slate-950 border-slate-900 opacity-60"
-                      }`}>
+                        }`}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-slate-500 uppercase">Step 4</span>
                           <MessageSquare className={`w-4 h-4 ${discordStep?.is_success ? "text-indigo-400" : "text-slate-655"}`} />
@@ -634,12 +627,11 @@ export default function Dashboard() {
                         </strong>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          activeWorkflow.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                          activeWorkflow.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
-                          activeWorkflow.status === "rejected" ? "bg-slate-500/10 text-slate-450 border border-slate-500/20" :
-                          "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${activeWorkflow.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                            activeWorkflow.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
+                              activeWorkflow.status === "rejected" ? "bg-slate-500/10 text-slate-450 border border-slate-500/20" :
+                                "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                          }`}>
                           {activeWorkflow.status === "pending_approval" ? "Pending Approval" : activeWorkflow.status}
                         </span>
                       </div>
@@ -649,17 +641,16 @@ export default function Dashboard() {
 
                   {/* Data & SQL Inspector Tab View */}
                   <div className="bg-slate-900/60 border border-slate-900 rounded-2xl p-6 backdrop-blur-sm flex flex-col gap-4">
-                    
+
                     {/* Tabs Switcher */}
                     <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                       <div className="flex items-center gap-4">
                         <button
                           onClick={() => setActiveTab("pipeline")}
-                          className={`text-sm font-semibold pb-2 border-b-2 transition ${
-                            activeTab === "pipeline" 
-                              ? "border-indigo-500 text-indigo-400" 
+                          className={`text-sm font-semibold pb-2 border-b-2 transition ${activeTab === "pipeline"
+                              ? "border-indigo-500 text-indigo-400"
                               : "border-transparent text-slate-400 hover:text-slate-200"
-                          }`}
+                            }`}
                         >
                           <span className="flex items-center gap-1.5">
                             <Terminal className="w-4 h-4" /> SQL Code & Console
@@ -667,11 +658,10 @@ export default function Dashboard() {
                         </button>
                         <button
                           onClick={() => setActiveTab("data")}
-                          className={`text-sm font-semibold pb-2 border-b-2 transition ${
-                            activeTab === "data" 
-                              ? "border-indigo-500 text-indigo-400" 
+                          className={`text-sm font-semibold pb-2 border-b-2 transition ${activeTab === "data"
+                              ? "border-indigo-500 text-indigo-400"
                               : "border-transparent text-slate-400 hover:text-slate-200"
-                          }`}
+                            }`}
                         >
                           <span className="flex items-center gap-1.5">
                             <Table className="w-4 h-4" /> Data Inspector
@@ -732,7 +722,7 @@ export default function Dashboard() {
                             </thead>
                             <tbody>
                               {productsList.map((prod, index) => (
-                                <tr 
+                                <tr
                                   key={index}
                                   className="border-b border-slate-900 hover:bg-slate-900/20 text-xs font-medium"
                                 >
@@ -740,11 +730,10 @@ export default function Dashboard() {
                                     {prod.name}
                                   </td>
                                   <td className="px-4 py-3 text-center">
-                                    <span className={`px-2 py-0.5 rounded font-mono font-bold ${
-                                      prod.stock_quantity <= 5 
-                                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/25" 
+                                    <span className={`px-2 py-0.5 rounded font-mono font-bold ${prod.stock_quantity <= 5
+                                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/25"
                                         : "bg-amber-500/10 text-amber-400 border border-amber-500/25"
-                                    }`}>
+                                      }`}>
                                       {prod.stock_quantity}
                                     </span>
                                   </td>
@@ -773,7 +762,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* Real Discord Embed Styling */}
-                      <div 
+                      <div
                         className="bg-[#2f3136] rounded-md p-4 text-left font-sans shadow-lg max-w-[600px] w-full border-l-4"
                         style={{ borderLeftColor: discordEmbed.embeds?.[0]?.color ? `#${discordEmbed.embeds[0].color.toString(16).padStart(6, '0')}` : '#ff4747' }}
                       >
@@ -782,7 +771,7 @@ export default function Dashboard() {
                             <div className="text-sm font-bold text-white hover:underline cursor-pointer">
                               {discordEmbed.embeds[0].title}
                             </div>
-                            
+
                             <div className="text-xs text-[#dcddde] whitespace-pre-wrap leading-relaxed">
                               {/* Parse markdown bold and links for rendering in preview */}
                               {discordEmbed.embeds[0].description.split("\n").map((line: string, i: number) => {
@@ -904,7 +893,7 @@ export default function Dashboard() {
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">Real-time telemetry, model tokens consumption, and database query status metrics.</p>
               </div>
-              <button 
+              <button
                 onClick={fetchMetrics}
                 className="self-start md:self-auto px-4 py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition-all flex items-center gap-1.5 active:scale-[0.98]"
               >
@@ -915,7 +904,7 @@ export default function Dashboard() {
 
             {/* KPI Metrics Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              
+
               {/* Card 1: Total Runs */}
               <div className="bg-slate-900/60 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-lg relative overflow-hidden group hover:border-slate-850 transition-all">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform" />
@@ -980,7 +969,7 @@ export default function Dashboard() {
 
             {/* Visual Graphs Section */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
+
               {/* Left: Donut Success Rate */}
               <div className="lg:col-span-4 bg-slate-900/60 border border-slate-900 p-6 rounded-2xl backdrop-blur-sm shadow-xl flex flex-col gap-5">
                 <h3 className="font-bold text-sm text-slate-350 uppercase tracking-wider border-b border-slate-800 pb-2">
@@ -995,7 +984,7 @@ export default function Dashboard() {
                           <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.15" />
                         </filter>
                       </defs>
-                      
+
                       {/* Background circle */}
                       <circle
                         cx="60"
@@ -1005,7 +994,7 @@ export default function Dashboard() {
                         stroke="#1e293b"
                         strokeWidth="10"
                       />
-                      
+
                       {(() => {
                         const total = (metrics?.completed_runs || 0) + (metrics?.pending_runs || 0) + (metrics?.failed_runs || 0) + (metrics?.rejected_runs || 0);
                         if (total === 0) {
@@ -1020,19 +1009,19 @@ export default function Dashboard() {
                             />
                           );
                         }
-                        
+
                         const r = 50;
                         const circ = 2 * Math.PI * r; // ~314.16
                         const c_pct = (metrics?.completed_runs || 0) / total;
                         const p_pct = (metrics?.pending_runs || 0) / total;
                         const f_pct = (metrics?.failed_runs || 0) / total;
                         const r_pct = (metrics?.rejected_runs || 0) / total;
-                        
+
                         const c_len = circ * c_pct;
                         const p_len = circ * p_pct;
                         const f_len = circ * f_pct;
                         const r_len = circ * r_pct;
-                        
+
                         return (
                           <>
                             {/* Completed Segment (Green) */}
@@ -1049,7 +1038,7 @@ export default function Dashboard() {
                                 filter="url(#donutGlow)"
                               />
                             )}
-                            
+
                             {/* Pending Segment (Amber) */}
                             {p_len > 0 && (
                               <circle
@@ -1064,7 +1053,7 @@ export default function Dashboard() {
                                 filter="url(#donutGlow)"
                               />
                             )}
-                            
+
                             {/* Failed Segment (Red) */}
                             {f_len > 0 && (
                               <circle
@@ -1098,7 +1087,7 @@ export default function Dashboard() {
                         );
                       })()}
                     </svg>
-                    
+
                     {/* Centered statistics text */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
                       <span className="text-2xl font-black text-slate-100 font-mono">
@@ -1147,7 +1136,7 @@ export default function Dashboard() {
                 <h3 className="font-bold text-sm text-slate-350 uppercase tracking-wider border-b border-slate-800 pb-2">
                   Performance Trends (Last 10 Executions)
                 </h3>
-                
+
                 {(() => {
                   const trendData = [...workflows].reverse().slice(-10);
                   if (trendData.length === 0) {
@@ -1157,11 +1146,11 @@ export default function Dashboard() {
                       </div>
                     );
                   }
-                  
+
                   const width = 500;
                   const height = 110;
                   const padding = 15;
-                  
+
                   // Calculate Latency line coordinates
                   const maxLatency = Math.max(...trendData.map(d => d.latency_ms), 1000);
                   const latencyPoints = trendData.map((d, index) => {
@@ -1169,7 +1158,7 @@ export default function Dashboard() {
                     const y = height - padding - (d.latency_ms / maxLatency) * (height - 2 * padding);
                     return { x, y, val: d.latency_ms, id: d.id };
                   });
-                  
+
                   const latencyPathStr = latencyPoints.length > 0
                     ? `M ${latencyPoints[0].x} ${latencyPoints[0].y} ` + latencyPoints.slice(1).map(p => `L ${p.x} ${p.y}`).join(" ")
                     : "";
@@ -1184,7 +1173,7 @@ export default function Dashboard() {
 
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      
+
                       {/* Latency Line Graph */}
                       <div className="flex flex-col gap-2">
                         <span className="text-xs font-bold text-slate-400 flex items-center justify-between">
@@ -1195,20 +1184,20 @@ export default function Dashboard() {
                           <svg className="w-full h-auto" viewBox={`0 0 ${width} ${height}`} width="100%">
                             <defs>
                               <linearGradient id="latencyGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#10b981" stopOpacity="0.2"/>
-                                <stop offset="100%" stopColor="#10b981" stopOpacity="0"/>
+                                <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
+                                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
                               </linearGradient>
                             </defs>
                             {/* Horizontal guide lines */}
                             <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#1e293b" strokeDasharray="2 2" />
-                            <line x1={padding} y1={height/2} x2={width - padding} y2={height/2} stroke="#1e293b" strokeDasharray="2 2" />
+                            <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#1e293b" strokeDasharray="2 2" />
                             <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" />
-                            
+
                             {/* Area fill */}
                             {latencyAreaStr && <path d={latencyAreaStr} fill="url(#latencyGrad)" />}
                             {/* Trend Line */}
                             {latencyPathStr && <path d={latencyPathStr} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" />}
-                            
+
                             {/* Dots */}
                             {latencyPoints.map((p, idx) => (
                               <g key={idx} className="group/dot cursor-pointer">
@@ -1231,15 +1220,15 @@ export default function Dashboard() {
                           <svg className="w-full h-auto" viewBox={`0 0 ${width} ${height}`} width="100%">
                             <defs>
                               <linearGradient id="tokenGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8"/>
-                                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.2"/>
+                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8" />
+                                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.2" />
                               </linearGradient>
                             </defs>
                             {/* Horizontal guide lines */}
                             <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#1e293b" strokeDasharray="2 2" />
-                            <line x1={padding} y1={height/2} x2={width - padding} y2={height/2} stroke="#1e293b" strokeDasharray="2 2" />
+                            <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#1e293b" strokeDasharray="2 2" />
                             <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" />
-                            
+
                             {/* Bars */}
                             {trendData.map((d, index) => {
                               const x = padding + index * barSpacing + (barSpacing - barWidth) / 2;
@@ -1277,7 +1266,7 @@ export default function Dashboard() {
               <h3 className="font-bold text-sm text-slate-350 uppercase tracking-wider border-b border-slate-800 pb-2">
                 Telemetry Log Streams
               </h3>
-              
+
               <div className="overflow-x-auto rounded-xl border border-slate-900 bg-slate-950/40">
                 {workflows.length === 0 ? (
                   <div className="text-center py-8 text-slate-500 text-sm">
@@ -1297,7 +1286,7 @@ export default function Dashboard() {
                     </thead>
                     <tbody>
                       {workflows.map((wf) => (
-                        <tr 
+                        <tr
                           key={wf.id}
                           className="border-b border-slate-900/60 hover:bg-slate-900/10 text-xs transition font-medium"
                         >
@@ -1308,11 +1297,10 @@ export default function Dashboard() {
                             {wf.task_query}
                           </td>
                           <td className="px-4 py-3.5 text-center">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
-                              wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                              wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
-                              "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                                wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
+                                  "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                              }`}>
                               {wf.status === "pending_approval" ? "Pending Approval" : wf.status}
                             </span>
                           </td>
@@ -1348,19 +1336,19 @@ export default function Dashboard() {
                 Pipeline Integration Blueprint
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 relative">
-                
+
                 <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
                   <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 1</div>
                   <h4 className="font-bold text-xs text-slate-200">Natural Query Input</h4>
                   <p className="text-[10px] text-slate-500">Natural language command (Thai) triggers the FastAPI agent pipeline entry point.</p>
                 </div>
-                
+
                 <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
                   <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 2</div>
                   <h4 className="font-bold text-xs text-slate-200">SQL Translation</h4>
                   <p className="text-[10px] text-slate-500">Gemini LLM compiles target Thai statement into valid PostgreSQL commands.</p>
                 </div>
-                
+
                 <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
                   <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 3</div>
                   <h4 className="font-bold text-xs text-slate-200">Supabase Execution</h4>
