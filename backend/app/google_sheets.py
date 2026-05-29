@@ -43,14 +43,14 @@ def get_sheets_client() -> gspread.Client:
     return client
 
 
-def append_critical_products(sheet_identifier: str, products: list[dict]) -> str:
+def append_data_to_sheet(sheet_identifier: str, data: list[dict]) -> str:
     """
-    Append list of critical (low stock) products to a Google Sheet.
+    Append list of query results dynamically to a Google Sheet.
     If the sheet does not exist (and identifier is a title), creates a new one.
     
     Args:
         sheet_identifier: The title of the sheet or its full URL.
-        products: A list of dicts, where each dict has keys like 'id', 'name', 'stock_quantity', 'price'.
+        data: A list of dicts, where each dict has keys representing the columns.
         
     Returns:
         The URL of the spreadsheet.
@@ -72,31 +72,68 @@ def append_critical_products(sheet_identifier: str, products: list[dict]) -> str
             except Exception as share_error:
                 print(f"[WARNING] Failed to share spreadsheet publicly: {share_error}")
                 
-    sheet = spreadsheet.get_worksheet(0)
+    if not data:
+        return spreadsheet.url
+
+    # Get keys/columns from the first item
+    keys = list(data[0].keys())
+    # Format headers: e.g., "stock_quantity" -> "Stock Quantity"
+    headers = [k.replace("_", " ").title() for k in keys] + ["Logged At"]
     
-    # Initialize sheet with headers if empty or missing
-    headers = ["Product ID", "Product Name", "Current Stock", "Price", "Logged At"]
-    values = sheet.get_all_values()
-    if not values:
-        sheet.append_row(headers)
-    elif values[0] != headers:
-        sheet.insert_row(headers, 1)
+    # Determine the target tab category based on data structure
+    keys_lower = [k.lower() for k in keys]
+    if len(keys) == 1 and keys[0].lower() in ["message", "status", "execution_result", "text"]:
+        tab_title = "คำชี้แจง"
+    elif any(k in keys_lower for k in ["amount", "total_sales", "sale_date", "sales", "total_amount"]):
+        tab_title = "ยอดขาย"
+    else:
+        tab_title = "คลังสินค้า"
         
+    # Get all current worksheets in the spreadsheet
+    worksheets = spreadsheet.worksheets()
+    first_ws = worksheets[0]
+    
+    # If there is only one default sheet, rename it to the target category
+    # \u0e41\u0e1c\u0e48\u0e191 is 'แผ่น1', \u0e0a\u0e35\u0e151 is 'ชีต1'
+    default_names = ["sheet1", "sheet 1", "\u0e41\u0e1c\u0e48\u0e191", "\u0e41\u0e1c\u0e48\u0e19 1", "\u0e0a\u0e35\u0e151", "\u0e0a\u0e35\u0e15 1"]
+    if len(worksheets) == 1 and first_ws.title.lower() in default_names:
+        try:
+            first_ws.update_title(tab_title)
+            sheet = first_ws
+        except Exception:
+            sheet = first_ws
+    else:
+        # Open existing category worksheet or create a new one
+        try:
+            sheet = spreadsheet.worksheet(tab_title)
+        except gspread.exceptions.WorksheetNotFound:
+            sheet = spreadsheet.add_worksheet(title=tab_title, rows="1000", cols="20")
+            
+    # Overwrite Mode: clear sheet and append fresh headers
+    sheet.clear()
+    sheet.append_row(headers)
+            
     # Prepare rows
     logged_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rows_to_append = []
     
-    for p in products:
-        rows_to_append.append([
-            p.get("id", "N/A"),
-            p.get("name", "N/A"),
-            p.get("stock_quantity", 0),
-            float(p.get("price", 0.0)),
-            logged_at
-        ])
+    for item in data:
+        row = []
+        for k in keys:
+            val = item.get(k, "")
+            # format type representation
+            if isinstance(val, float):
+                row.append(float(val))
+            elif isinstance(val, int) and not isinstance(val, bool):
+                row.append(int(val))
+            else:
+                row.append(str(val))
+        row.append(logged_at)
+        rows_to_append.append(row)
         
-    # Append rows if products list is not empty
+    # Append rows if data is not empty
     if rows_to_append:
         sheet.append_rows(rows_to_append)
         
     return spreadsheet.url
+
