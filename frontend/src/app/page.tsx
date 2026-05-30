@@ -22,6 +22,12 @@ import {
   Trash2
 } from "lucide-react";
 
+import StatusBadge from "@/components/StatusBadge";
+import PipelineStepCard from "@/components/PipelineStepCard";
+import KPICard from "@/components/KPICard";
+import DonutChart from "@/components/DonutChart";
+import TrendCharts from "@/components/TrendCharts";
+
 const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_URL = rawApiUrl.endsWith("/") ? rawApiUrl.slice(0, -1) : rawApiUrl;
 
@@ -73,6 +79,97 @@ interface Metrics {
   rejected_runs: number;
   success_rate: number;
 }
+
+const QUICK_PROMPTS = [
+  {
+    label: "🔍 หาสินค้าวิกฤต (Stock < 10)",
+    query: "หาสินค้าคงคลังที่เหลือน้อยกว่า 10 ชิ้นแล้วรายงานลง Google Sheets",
+  },
+  {
+    label: "📊 ยอดขายรายสินค้า (Total Sales)",
+    query: "สรุปยอดขายรวมของสินค้าแต่ละรายการแล้วรายงานลง Google Sheets",
+  },
+  {
+    label: "📅 ประวัติการขาย 7 วันล่าสุด",
+    query: "ดึงรายการประวัติการขาย 7 วันล่าสุดพร้อมชื่อสินค้าและยอดเงิน",
+  },
+  {
+    label: "💰 สินค้าราคาพรีเมียม (> 10,000)",
+    query: "หาสินค้าที่มีราคาสูงกว่า 10000 บาทแล้วรายงานลง Google Sheets",
+  },
+];
+
+const ONBOARDING_STEPS = [
+  {
+    step: "Step 1",
+    title: "Trigger Command",
+    description: "Input a natural Thai request or use a Quick Prompt on the left.",
+    icon: Play,
+  },
+  {
+    step: "Step 2",
+    title: "Verify Pipeline",
+    description: "Inspect translated SQL, live query results, and generated sheet logs.",
+    icon: Terminal,
+  },
+  {
+    step: "Step 3",
+    title: "Approve & Dispatch",
+    description: "Preview the Discord webhook embed card and click dispatch to approve.",
+    icon: MessageSquare,
+  },
+];
+
+const LOADER_STEPS = [
+  {
+    stepNumber: 1,
+    title: "Text-to-SQL Translation",
+    description: "Converting natural Thai query into PostgreSQL",
+  },
+  {
+    stepNumber: 2,
+    title: "Supabase Execution",
+    description: "Querying live database records",
+  },
+  {
+    stepNumber: 3,
+    title: "Google Sheets Logging",
+    description: "Appending results to Google Sheet",
+  },
+  {
+    stepNumber: 4,
+    title: "Discord Webhook Drafting",
+    description: "Preparing rich notification payload",
+  },
+];
+
+const BLUEPRINT_PHASES = [
+  {
+    phase: "Phase 1",
+    title: "Natural Query Input",
+    description: "Natural language command (Thai) triggers the FastAPI agent pipeline entry point.",
+  },
+  {
+    phase: "Phase 2",
+    title: "SQL Translation",
+    description: "Gemini LLM compiles target Thai statement into valid PostgreSQL commands.",
+  },
+  {
+    phase: "Phase 3",
+    title: "Supabase Execution",
+    description: "FastAPI executes query safely, extracting critical low stock item records.",
+  },
+  {
+    phase: "Phase 4",
+    title: "Google Sheets Logger",
+    description: "Results are securely written to the shared report spreadsheet via Service Account.",
+  },
+  {
+    phase: "Phase 5",
+    title: "Human Approval Gate",
+    description: "Dashboard prompts human validation. On click, Discord webhook triggers output card delivery.",
+  },
+];
 
 export default function Dashboard() {
   // Inputs
@@ -500,34 +597,16 @@ export default function Dashboard() {
                 <div className="flex flex-col gap-2 mt-2">
                   <span className="text-xs text-slate-500 font-medium text-left">Quick Prompts:</span>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setQuery("หาสินค้าคงคลังที่เหลือน้อยกว่า 10 ชิ้นแล้วรายงานลง Google Sheets")}
-                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
-                    >
-                      🔍 หาสินค้าวิกฤต (Stock &lt; 10)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuery("สรุปยอดขายรวมของสินค้าแต่ละรายการแล้วรายงานลง Google Sheets")}
-                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
-                    >
-                      📊 ยอดขายรายสินค้า (Total Sales)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuery("ดึงรายการประวัติการขาย 7 วันล่าสุดพร้อมชื่อสินค้าและยอดเงิน")}
-                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
-                    >
-                      📅 ประวัติการขาย 7 วันล่าสุด
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuery("หาสินค้าที่มีราคาสูงกว่า 10000 บาทแล้วรายงานลง Google Sheets")}
-                      className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
-                    >
-                      💰 สินค้าราคาพรีเมียม (&gt; 10,000)
-                    </button>
+                    {QUICK_PROMPTS.map((prompt, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setQuery(prompt.query)}
+                        className="text-xs px-3 py-2 rounded-lg bg-slate-950 border border-slate-850 hover:border-indigo-500/50 hover:bg-slate-900 text-slate-400 hover:text-slate-200 transition font-medium text-left"
+                      >
+                        {prompt.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -543,7 +622,7 @@ export default function Dashboard() {
                     {workflows.length > 0 && (
                       <button
                         onClick={handleClearAllWorkflows}
-                        className="text-xs text-rose-450 hover:text-rose-400 font-semibold flex items-center gap-1 transition-all"
+                        className="text-xs text-rose-500 hover:text-rose-400 font-semibold flex items-center gap-1 transition-all"
                         title="Delete all workflows history"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -589,14 +668,7 @@ export default function Dashboard() {
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                                wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
-                                wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
-                                  wf.status === "rejected" ? "bg-slate-500/10 text-slate-400 border border-slate-500/20" :
-                                    "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                              }`}>
-                              {wf.status === "pending_approval" ? "Pending Approval" : wf.status === "rejected" ? "Rejected" : wf.status}
-                            </span>
+                            <StatusBadge status={wf.status} />
                           </div>
 
                           <p className="text-sm font-medium text-slate-300 line-clamp-1 mb-2">
@@ -655,67 +727,38 @@ export default function Dashboard() {
 
                     {/* Stepper Pipeline */}
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 relative">
-
-                      {/* Step 1: SQL Generation */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${generateStep?.is_success
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
-                          : "bg-slate-950 border-slate-900 opacity-60"
-                        }`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-500 uppercase">Step 1</span>
-                          <Terminal className={`w-4 h-4 ${generateStep?.is_success ? "text-indigo-400" : "text-slate-650"}`} />
-                        </div>
-                        <h4 className="font-semibold text-sm text-slate-200">SQL Translation</h4>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {generateStep?.is_success ? "Success" : "Pending"}
-                        </span>
-                      </div>
-
-                      {/* Step 2: DB Execution */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${executeStep?.is_success
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
-                          : "bg-slate-950 border-slate-900 opacity-60"
-                        }`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-500 uppercase">Step 2</span>
-                          <Database className={`w-4 h-4 ${executeStep?.is_success ? "text-indigo-400" : "text-slate-650"}`} />
-                        </div>
-                        <h4 className="font-semibold text-sm text-slate-200">Supabase Execution</h4>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {executeStep?.is_success ? "Executed" : "Pending"}
-                        </span>
-                      </div>
-
-                      {/* Step 3: Google Sheets */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${sheetsStep?.is_success
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
-                          : "bg-slate-950 border-slate-900 opacity-60"
-                        }`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-500 uppercase">Step 3</span>
-                          <FileSpreadsheet className={`w-4 h-4 ${sheetsStep?.is_success ? "text-indigo-400" : "text-slate-650"}`} />
-                        </div>
-                        <h4 className="font-semibold text-sm text-slate-200">Google Sheets Log</h4>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {sheetsStep?.is_success ? "Logged" : "Pending"}
-                        </span>
-                      </div>
-
-                      {/* Step 4: Discord Embed Draft */}
-                      <div className={`p-4 rounded-xl border text-left flex flex-col gap-2 ${discordStep?.is_success
-                          ? "bg-indigo-950/10 border-indigo-500/30 text-indigo-300"
-                          : "bg-slate-950 border-slate-900 opacity-60"
-                        }`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-500 uppercase">Step 4</span>
-                          <MessageSquare className={`w-4 h-4 ${discordStep?.is_success ? "text-indigo-400" : "text-slate-655"}`} />
-                        </div>
-                        <h4 className="font-semibold text-sm text-slate-200">Discord Drafting</h4>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          {discordStep?.is_success ? "Drafted" : "Pending"}
-                        </span>
-                      </div>
-
+                      <PipelineStepCard
+                        stepNumber={1}
+                        title="SQL Translation"
+                        isSuccess={!!generateStep?.is_success}
+                        successText="Success"
+                        pendingText="Pending"
+                        icon={Terminal}
+                      />
+                      <PipelineStepCard
+                        stepNumber={2}
+                        title="Supabase Execution"
+                        isSuccess={!!executeStep?.is_success}
+                        successText="Executed"
+                        pendingText="Pending"
+                        icon={Database}
+                      />
+                      <PipelineStepCard
+                        stepNumber={3}
+                        title="Google Sheets Log"
+                        isSuccess={!!sheetsStep?.is_success}
+                        successText="Logged"
+                        pendingText="Pending"
+                        icon={FileSpreadsheet}
+                      />
+                      <PipelineStepCard
+                        stepNumber={4}
+                        title="Discord Drafting"
+                        isSuccess={!!discordStep?.is_success}
+                        successText="Drafted"
+                        pendingText="Pending"
+                        icon={MessageSquare}
+                      />
                     </div>
 
                     {/* Workflow Metrics Banner */}
@@ -735,13 +778,7 @@ export default function Dashboard() {
                         </strong>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${activeWorkflow.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                            activeWorkflow.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
-                              activeWorkflow.status === "rejected" ? "bg-slate-500/10 text-slate-450 border border-slate-500/20" :
-                                "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                          }`}>
-                          {activeWorkflow.status === "pending_approval" ? "Pending Approval" : activeWorkflow.status}
-                        </span>
+                        <StatusBadge status={activeWorkflow.status} />
                       </div>
                     </div>
 
@@ -1027,47 +1064,36 @@ export default function Dashboard() {
 
                   {/* Execution Steps Loader */}
                   <div className="w-full max-w-md bg-slate-950 border border-slate-900 rounded-xl p-5 flex flex-col gap-4 text-left">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xs font-bold animate-pulse">1</div>
-                      <div className="flex-1">
-                        <h5 className="text-xs font-semibold text-slate-200">Text-to-SQL Translation</h5>
-                        <p className="text-[10px] text-slate-500">Converting natural Thai query into PostgreSQL</p>
-                      </div>
-                      <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded animate-pulse">Running</span>
-                    </div>
-
-                    <div className="h-px bg-slate-900" />
-
-                    <div className="flex items-center gap-3 opacity-50">
-                      <div className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-bold">2</div>
-                      <div className="flex-1">
-                        <h5 className="text-xs font-semibold text-slate-350">Supabase Execution</h5>
-                        <p className="text-[10px] text-slate-500">Querying live database records</p>
-                      </div>
-                      <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">Pending</span>
-                    </div>
-
-                    <div className="h-px bg-slate-900" />
-
-                    <div className="flex items-center gap-3 opacity-50">
-                      <div className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-bold">3</div>
-                      <div className="flex-1">
-                        <h5 className="text-xs font-semibold text-slate-350">Google Sheets Logging</h5>
-                        <p className="text-[10px] text-slate-500">Appending results to Google Sheet</p>
-                      </div>
-                      <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">Pending</span>
-                    </div>
-
-                    <div className="h-px bg-slate-900" />
-
-                    <div className="flex items-center gap-3 opacity-50">
-                      <div className="w-6 h-6 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center text-xs font-bold">4</div>
-                      <div className="flex-1">
-                        <h5 className="text-xs font-semibold text-slate-350">Discord Webhook Drafting</h5>
-                        <p className="text-[10px] text-slate-500">Preparing rich notification payload</p>
-                      </div>
-                      <span className="text-[10px] bg-slate-800 text-slate-500 px-2 py-0.5 rounded">Pending</span>
-                    </div>
+                    {LOADER_STEPS.map((step, idx) => {
+                      const isFirst = idx === 0;
+                      return (
+                        <React.Fragment key={step.stepNumber}>
+                          {idx > 0 && <div className="h-px bg-slate-900" />}
+                          <div className={`flex items-center gap-3 ${isFirst ? "" : "opacity-50"}`}>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                              isFirst
+                                ? "bg-indigo-500/20 text-indigo-400 animate-pulse"
+                                : "bg-slate-800 text-slate-400"
+                            }`}>
+                              {step.stepNumber}
+                            </div>
+                            <div className="flex-1">
+                              <h5 className={`text-xs font-semibold ${isFirst ? "text-slate-200" : "text-slate-350"}`}>
+                                {step.title}
+                              </h5>
+                              <p className="text-[10px] text-slate-500">{step.description}</p>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded ${
+                              isFirst
+                                ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse"
+                                : "bg-slate-800 text-slate-500"
+                            }`}>
+                              {isFirst ? "Running" : "Pending"}
+                            </span>
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (
@@ -1088,38 +1114,22 @@ export default function Dashboard() {
 
                   {/* Step Guide Cards */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-2xl text-left mt-2">
-                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl hover:border-slate-800 transition">
-                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
-                        <Play className="w-4 h-4" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Step 1</span>
-                      </div>
-                      <h5 className="text-xs font-bold text-slate-200 mb-1">Trigger Command</h5>
-                      <p className="text-[10px] text-slate-500 leading-relaxed">
-                        Input a natural Thai request or use a Quick Prompt on the left.
-                      </p>
-                    </div>
-
-                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl hover:border-slate-800 transition">
-                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
-                        <Terminal className="w-4 h-4" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Step 2</span>
-                      </div>
-                      <h5 className="text-xs font-bold text-slate-200 mb-1">Verify Pipeline</h5>
-                      <p className="text-[10px] text-slate-500 leading-relaxed">
-                        Inspect translated SQL, live query results, and generated sheet logs.
-                      </p>
-                    </div>
-
-                    <div className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl hover:border-slate-800 transition">
-                      <div className="flex items-center gap-2 text-indigo-400 mb-2">
-                        <MessageSquare className="w-4 h-4" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider">Step 3</span>
-                      </div>
-                      <h5 className="text-xs font-bold text-slate-200 mb-1">Approve & Dispatch</h5>
-                      <p className="text-[10px] text-slate-500 leading-relaxed">
-                        Preview the Discord webhook embed card and click dispatch to approve.
-                      </p>
-                    </div>
+                    {ONBOARDING_STEPS.map((step) => {
+                      const Icon = step.icon;
+                      return (
+                        <div
+                          key={step.step}
+                          className="p-4 bg-slate-950/50 border border-slate-850 rounded-xl hover:border-slate-800 transition"
+                        >
+                          <div className="flex items-center gap-2 text-indigo-400 mb-2">
+                            <Icon className="w-4 h-4" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{step.step}</span>
+                          </div>
+                          <h5 className="text-xs font-bold text-slate-200 mb-1">{step.title}</h5>
+                          <p className="text-[10px] text-slate-500 leading-relaxed">{step.description}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1148,361 +1158,46 @@ export default function Dashboard() {
 
             {/* KPI Metrics Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-
-              {/* Card 1: Total Runs */}
-              <div className="bg-slate-900/60 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-lg relative overflow-hidden group hover:border-slate-850 transition-all">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform" />
-                <div className="flex flex-col gap-1 z-10">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Operations Runs</span>
-                  <span className="text-2xl font-black text-slate-100 font-mono">{metrics?.total_runs || 0}</span>
-                  <span className="text-[10px] text-slate-405 mt-0.5">Total pipeline invocations</span>
-                </div>
-                <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 z-10 border border-indigo-500/15">
-                  <Layers className="w-5 h-5" />
-                </div>
-              </div>
-
-              {/* Card 2: Total Tokens */}
-              <div className="bg-slate-900/60 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-lg relative overflow-hidden group hover:border-slate-850 transition-all">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-violet-500/5 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform" />
-                <div className="flex flex-col gap-1 z-10">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">LLM Tokens Consumed</span>
-                  <span className="text-2xl font-black text-slate-100 font-mono">{(metrics?.total_tokens || 0).toLocaleString()}</span>
-                  <span className="text-[10px] text-slate-405 mt-0.5">Gemini 3.1 Flash Lite API volume</span>
-                </div>
-                <div className="p-3 bg-violet-500/10 rounded-xl text-violet-400 z-10 border border-violet-500/15">
-                  <Coins className="w-5 h-5" />
-                </div>
-              </div>
-
-              {/* Card 3: Avg Latency */}
-              <div className="bg-slate-900/60 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-lg relative overflow-hidden group hover:border-slate-850 transition-all">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform" />
-                <div className="flex flex-col gap-1 z-10">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Average Pipeline Latency</span>
-                  <span className="text-2xl font-black text-slate-100 font-mono">
-                    {metrics ? `${(metrics.avg_latency_ms / 1000).toFixed(2)}s` : "0.00s"}
-                  </span>
-                  <span className="text-[10px] text-slate-405 font-mono mt-0.5">
-                    {metrics ? `${metrics.avg_latency_ms.toLocaleString()} ms` : "0 ms"}
-                  </span>
-                </div>
-                <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 z-10 border border-emerald-500/15">
-                  <Clock className="w-5 h-5" />
-                </div>
-              </div>
-
-              {/* Card 4: Success Rate */}
-              <div className="bg-slate-900/60 border border-slate-900 p-5 rounded-2xl flex items-center justify-between shadow-lg relative overflow-hidden group hover:border-slate-850 transition-all">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full translate-x-8 -translate-y-8 group-hover:scale-110 transition-transform" />
-                <div className="flex flex-col gap-1 z-10">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Overall Success Rate</span>
-                  <span className="text-2xl font-black text-slate-100 font-mono">
-                    {metrics ? `${metrics.success_rate}%` : "100%"}
-                  </span>
-                  <span className="text-[10px] text-slate-405 mt-0.5">
-                    {metrics ? `${metrics.completed_runs} of ${metrics.completed_runs + metrics.failed_runs + metrics.rejected_runs} runs` : "0 of 0 runs"}
-                  </span>
-                </div>
-                <div className="p-3 bg-amber-500/10 rounded-xl text-amber-400 z-10 border border-amber-500/15">
-                  <CheckCircle2 className="w-5 h-5" />
-                </div>
-              </div>
-
+              <KPICard
+                title="Total Operations Runs"
+                value={metrics?.total_runs || 0}
+                subtitle="Total pipeline invocations"
+                icon={Layers}
+                color="indigo"
+              />
+              <KPICard
+                title="LLM Tokens Consumed"
+                value={(metrics?.total_tokens || 0).toLocaleString()}
+                subtitle="Gemini 3.1 Flash Lite API volume"
+                icon={Coins}
+                color="violet"
+              />
+              <KPICard
+                title="Average Pipeline Latency"
+                value={metrics ? `${(metrics.avg_latency_ms / 1000).toFixed(2)}s` : "0.00s"}
+                subtitle={metrics ? `${metrics.avg_latency_ms.toLocaleString()} ms` : "0 ms"}
+                icon={Clock}
+                color="emerald"
+              />
+              <KPICard
+                title="Overall Success Rate"
+                value={metrics ? `${metrics.success_rate}%` : "100%"}
+                subtitle={metrics ? `${metrics.completed_runs} of ${metrics.completed_runs + metrics.failed_runs + metrics.rejected_runs} runs` : "0 of 0 runs"}
+                icon={CheckCircle2}
+                color="amber"
+              />
             </div>
 
             {/* Visual Graphs Section */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <DonutChart metrics={metrics} />
 
-              {/* Left: Donut Success Rate */}
-              <div className="lg:col-span-4 bg-slate-900/60 border border-slate-900 p-6 rounded-2xl backdrop-blur-sm shadow-xl flex flex-col gap-5">
-                <h3 className="font-bold text-sm text-slate-350 uppercase tracking-wider border-b border-slate-800 pb-2">
-                  Outcome Distribution
-                </h3>
-                <div className="flex flex-col items-center justify-center py-4 gap-4">
-                  {/* SVG Donut Chart */}
-                  <div className="relative w-40 h-40">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
-                      <defs>
-                        <filter id="donutGlow" x="-20%" y="-20%" width="140%" height="140%">
-                          <feDropShadow dx="0" dy="1" stdDeviation="2" floodOpacity="0.15" />
-                        </filter>
-                      </defs>
-
-                      {/* Background circle */}
-                      <circle
-                        cx="60"
-                        cy="60"
-                        r="50"
-                        fill="transparent"
-                        stroke="#1e293b"
-                        strokeWidth="10"
-                      />
-
-                      {(() => {
-                        const total = (metrics?.completed_runs || 0) + (metrics?.pending_runs || 0) + (metrics?.failed_runs || 0) + (metrics?.rejected_runs || 0);
-                        if (total === 0) {
-                          return (
-                            <circle
-                              cx="60"
-                              cy="60"
-                              r="50"
-                              fill="transparent"
-                              stroke="#334155"
-                              strokeWidth="10"
-                            />
-                          );
-                        }
-
-                        const r = 50;
-                        const circ = 2 * Math.PI * r; // ~314.16
-                        const c_pct = (metrics?.completed_runs || 0) / total;
-                        const p_pct = (metrics?.pending_runs || 0) / total;
-                        const f_pct = (metrics?.failed_runs || 0) / total;
-                        const r_pct = (metrics?.rejected_runs || 0) / total;
-
-                        const c_len = circ * c_pct;
-                        const p_len = circ * p_pct;
-                        const f_len = circ * f_pct;
-                        const r_len = circ * r_pct;
-
-                        return (
-                          <>
-                            {/* Completed Segment (Green) */}
-                            {c_len > 0 && (
-                              <circle
-                                cx="60"
-                                cy="60"
-                                r="50"
-                                fill="transparent"
-                                stroke="#10b981"
-                                strokeWidth="10"
-                                strokeDasharray={`${c_len} ${circ}`}
-                                strokeDashoffset="0"
-                                filter="url(#donutGlow)"
-                              />
-                            )}
-
-                            {/* Pending Segment (Amber) */}
-                            {p_len > 0 && (
-                              <circle
-                                cx="60"
-                                cy="60"
-                                r="50"
-                                fill="transparent"
-                                stroke="#f59e0b"
-                                strokeWidth="10"
-                                strokeDasharray={`${p_len} ${circ}`}
-                                strokeDashoffset={-c_len}
-                                filter="url(#donutGlow)"
-                              />
-                            )}
-
-                            {/* Failed Segment (Red) */}
-                            {f_len > 0 && (
-                              <circle
-                                cx="60"
-                                cy="60"
-                                r="50"
-                                fill="transparent"
-                                stroke="#ef4444"
-                                strokeWidth="10"
-                                strokeDasharray={`${f_len} ${circ}`}
-                                strokeDashoffset={-(c_len + p_len)}
-                                filter="url(#donutGlow)"
-                              />
-                            )}
-
-                            {/* Rejected Segment (Slate) */}
-                            {r_len > 0 && (
-                              <circle
-                                cx="60"
-                                cy="60"
-                                r="50"
-                                fill="transparent"
-                                stroke="#64748b"
-                                strokeWidth="10"
-                                strokeDasharray={`${r_len} ${circ}`}
-                                strokeDashoffset={-(c_len + p_len + f_len)}
-                                filter="url(#donutGlow)"
-                              />
-                            )}
-                          </>
-                        );
-                      })()}
-                    </svg>
-
-                    {/* Centered statistics text */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-black text-slate-100 font-mono">
-                        {metrics ? `${metrics.success_rate}%` : "100%"}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Success</span>
-                    </div>
-                  </div>
-
-                  {/* Legends */}
-                  <div className="grid grid-cols-4 gap-1 w-full mt-2 text-[11px]">
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        <span className="font-semibold text-slate-300">Success</span>
-                      </div>
-                      <span className="font-mono text-slate-500">{metrics?.completed_runs || 0} runs</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-amber-500" />
-                        <span className="font-semibold text-slate-300">Pending</span>
-                      </div>
-                      <span className="font-mono text-slate-500">{metrics?.pending_runs || 0} runs</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-rose-500" />
-                        <span className="font-semibold text-slate-300">Failed</span>
-                      </div>
-                      <span className="font-mono text-slate-500">{metrics?.failed_runs || 0} runs</span>
-                    </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-slate-500" />
-                        <span className="font-semibold text-slate-300">Rejected</span>
-                      </div>
-                      <span className="font-mono text-slate-500">{metrics?.rejected_runs || 0} runs</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right: Trend Graphs */}
               <div className="lg:col-span-8 bg-slate-900/60 border border-slate-900 p-6 rounded-2xl backdrop-blur-sm shadow-xl flex flex-col gap-5">
                 <h3 className="font-bold text-sm text-slate-350 uppercase tracking-wider border-b border-slate-800 pb-2">
                   Performance Trends (Last 10 Executions)
                 </h3>
-
-                {(() => {
-                  const trendData = [...workflows].reverse().slice(-10);
-                  if (trendData.length === 0) {
-                    return (
-                      <div className="flex-1 flex items-center justify-center text-slate-550 text-sm py-12">
-                        No execution data available for trends.
-                      </div>
-                    );
-                  }
-
-                  const width = 500;
-                  const height = 110;
-                  const padding = 15;
-
-                  // Calculate Latency line coordinates
-                  const maxLatency = Math.max(...trendData.map(d => d.latency_ms), 1000);
-                  const latencyPoints = trendData.map((d, index) => {
-                    const x = padding + (index * (width - 2 * padding)) / Math.max(trendData.length - 1, 1);
-                    const y = height - padding - (d.latency_ms / maxLatency) * (height - 2 * padding);
-                    return { x, y, val: d.latency_ms, id: d.id };
-                  });
-
-                  const latencyPathStr = latencyPoints.length > 0
-                    ? `M ${latencyPoints[0].x} ${latencyPoints[0].y} ` + latencyPoints.slice(1).map(p => `L ${p.x} ${p.y}`).join(" ")
-                    : "";
-                  const latencyAreaStr = latencyPoints.length > 0
-                    ? `${latencyPathStr} L ${latencyPoints[latencyPoints.length - 1].x} ${height - padding} L ${latencyPoints[0].x} ${height - padding} Z`
-                    : "";
-
-                  // Calculate Token bar properties
-                  const maxTokens = Math.max(...trendData.map(d => d.tokens_used), 500);
-                  const barWidth = Math.min(25, (width - 2 * padding) / (trendData.length * 1.5));
-                  const barSpacing = (width - 2 * padding) / Math.max(trendData.length, 1);
-
-                  return (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                      {/* Latency Line Graph */}
-                      <div className="flex flex-col gap-2">
-                        <span className="text-xs font-bold text-slate-400 flex items-center justify-between">
-                          <span>Latency History (ms)</span>
-                          <span className="text-[10px] text-slate-500 font-mono">Max: {maxLatency.toLocaleString()} ms</span>
-                        </span>
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-850">
-                          <svg className="w-full h-auto" viewBox={`0 0 ${width} ${height}`} width="100%">
-                            <defs>
-                              <linearGradient id="latencyGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#10b981" stopOpacity="0.2" />
-                                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                              </linearGradient>
-                            </defs>
-                            {/* Horizontal guide lines */}
-                            <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#1e293b" strokeDasharray="2 2" />
-                            <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#1e293b" strokeDasharray="2 2" />
-                            <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" />
-
-                            {/* Area fill */}
-                            {latencyAreaStr && <path d={latencyAreaStr} fill="url(#latencyGrad)" />}
-                            {/* Trend Line */}
-                            {latencyPathStr && <path d={latencyPathStr} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" />}
-
-                            {/* Dots */}
-                            {latencyPoints.map((p, idx) => (
-                              <g key={idx} className="group/dot cursor-pointer">
-                                <circle cx={p.x} cy={p.y} r="4" fill="#022c22" stroke="#10b981" strokeWidth="2" />
-                                <circle cx={p.x} cy={p.y} r="8" fill="#10b981" fillOpacity="0" className="hover:fill-opacity-20 transition-all" />
-                                <title>Run #{p.id}: {p.val.toLocaleString()} ms</title>
-                              </g>
-                            ))}
-                          </svg>
-                        </div>
-                      </div>
-
-                      {/* Token Bar Graph */}
-                      <div className="flex flex-col gap-2">
-                        <span className="text-xs font-bold text-slate-400 flex items-center justify-between">
-                          <span>Tokens Consumption</span>
-                          <span className="text-[10px] text-slate-500 font-mono">Max: {maxTokens.toLocaleString()} tokens</span>
-                        </span>
-                        <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-850">
-                          <svg className="w-full h-auto" viewBox={`0 0 ${width} ${height}`} width="100%">
-                            <defs>
-                              <linearGradient id="tokenGrad" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="#6366f1" stopOpacity="0.8" />
-                                <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.2" />
-                              </linearGradient>
-                            </defs>
-                            {/* Horizontal guide lines */}
-                            <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="#1e293b" strokeDasharray="2 2" />
-                            <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="#1e293b" strokeDasharray="2 2" />
-                            <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#334155" />
-
-                            {/* Bars */}
-                            {trendData.map((d, index) => {
-                              const x = padding + index * barSpacing + (barSpacing - barWidth) / 2;
-                              const h = (d.tokens_used / maxTokens) * (height - 2 * padding);
-                              const y = height - padding - h;
-                              return (
-                                <g key={index} className="group/bar cursor-pointer">
-                                  <rect
-                                    x={x}
-                                    y={y}
-                                    width={barWidth}
-                                    height={Math.max(2, h)}
-                                    rx="2"
-                                    fill="url(#tokenGrad)"
-                                    className="hover:opacity-85 transition-opacity"
-                                  />
-                                  <title>Run #{d.id}: {d.tokens_used.toLocaleString()} tokens</title>
-                                </g>
-                              );
-                            })}
-                          </svg>
-                        </div>
-                      </div>
-
-                    </div>
-                  );
-                })()}
-
+                <TrendCharts workflows={workflows} />
               </div>
-
             </div>
 
             {/* Recent Executions Logs Table */}
@@ -1541,12 +1236,7 @@ export default function Dashboard() {
                             {wf.task_query}
                           </td>
                           <td className="px-4 py-3.5 text-center">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${wf.status === "completed" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                                wf.status === "pending_approval" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse" :
-                                  "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                              }`}>
-                              {wf.status === "pending_approval" ? "Pending Approval" : wf.status}
-                            </span>
+                            <StatusBadge status={wf.status} />
                           </td>
                           <td className="px-4 py-3.5 text-right font-mono text-slate-300">
                             {wf.latency_ms > 0 ? `${(wf.latency_ms / 1000).toFixed(2)}s` : "-"}
@@ -1567,7 +1257,7 @@ export default function Dashboard() {
                               </button>
                               <button
                                 onClick={(e) => handleDeleteWorkflow(wf.id, e)}
-                                className="p-1 bg-rose-600/10 hover:bg-rose-600 text-rose-450 hover:text-white rounded border border-rose-500/20 transition-all"
+                                className="p-1 bg-rose-600/10 hover:bg-rose-600 text-rose-500 hover:text-white rounded border border-rose-500/20 transition-all"
                                 title={`Delete Run #${wf.id}`}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1590,35 +1280,13 @@ export default function Dashboard() {
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 relative">
 
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
-                  <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 1</div>
-                  <h4 className="font-bold text-xs text-slate-200">Natural Query Input</h4>
-                  <p className="text-[10px] text-slate-500">Natural language command (Thai) triggers the FastAPI agent pipeline entry point.</p>
-                </div>
-
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
-                  <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 2</div>
-                  <h4 className="font-bold text-xs text-slate-200">SQL Translation</h4>
-                  <p className="text-[10px] text-slate-500">Gemini LLM compiles target Thai statement into valid PostgreSQL commands.</p>
-                </div>
-
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
-                  <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 3</div>
-                  <h4 className="font-bold text-xs text-slate-200">Supabase Execution</h4>
-                  <p className="text-[10px] text-slate-500">FastAPI executes query safely, extracting critical low stock item records.</p>
-                </div>
-
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
-                  <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 4</div>
-                  <h4 className="font-bold text-xs text-slate-200">Google Sheets Logger</h4>
-                  <p className="text-[10px] text-slate-500">Results are securely written to the shared report spreadsheet via Service Account.</p>
-                </div>
-
-                <div className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
-                  <div className="text-indigo-400 font-mono text-xs font-bold uppercase">Phase 5</div>
-                  <h4 className="font-bold text-xs text-slate-200">Human Approval Gate</h4>
-                  <p className="text-[10px] text-slate-500">Dashboard prompts human validation. On click, Discord webhook triggers output card delivery.</p>
-                </div>
+                {BLUEPRINT_PHASES.map((phase) => (
+                  <div key={phase.phase} className="p-4 bg-slate-950 rounded-xl border border-slate-900 flex flex-col gap-2 relative">
+                    <div className="text-indigo-400 font-mono text-xs font-bold uppercase">{phase.phase}</div>
+                    <h4 className="font-bold text-xs text-slate-200">{phase.title}</h4>
+                    <p className="text-[10px] text-slate-500">{phase.description}</p>
+                  </div>
+                ))}
 
               </div>
             </div>

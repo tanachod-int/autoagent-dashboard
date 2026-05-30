@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS agent_workflows (
     status TEXT NOT NULL DEFAULT 'pending',
     tokens_used INT DEFAULT 0,
     latency_ms INT DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 4. Table: workflow_steps

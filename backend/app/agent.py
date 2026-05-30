@@ -1,7 +1,9 @@
 import os
 import time
 import json
-from datetime import datetime
+import re
+from datetime import datetime, date, timezone
+from decimal import Decimal
 from typing import TypedDict, List, Dict, Any, Optional
 import google.generativeai as genai
 from langgraph.graph import StateGraph, END
@@ -19,6 +21,135 @@ load_dotenv(dotenv_path=dotenv_path)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+
+
+class AgentJSONEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle Decimal and datetime/date objects."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super().default(obj)
+
+
+def validate_sql(sql: str) -> bool:
+    """
+    Validates that the SQL query is a single, read-only SELECT statement
+    restricted to whitelisted tables ('products', 'sales_records').
+    """
+    if not sql:
+        return False
+
+    # 1. Strip comments and clean up
+    # Remove single-line comments
+    sql_clean = re.sub(r'--.*', '', sql)
+    # Remove multi-line comments
+    sql_clean = re.sub(r'/\*.*?\*/', '', sql_clean, flags=re.DOTALL)
+    sql_clean = sql_clean.strip()
+
+    # 2. Must start with SELECT or WITH (case-insensitive)
+    if not (sql_clean.upper().startswith("SELECT") or sql_clean.upper().startswith("WITH")):
+        return False
+
+    # 3. Check for multiple statements by checking semicolons outside string literals.
+    in_single_quote = False
+    in_double_quote = False
+    i = 0
+    while i < len(sql_clean):
+        char = sql_clean[i]
+        if char == "'" and (i == 0 or sql_clean[i-1] != '\\'):
+            in_single_quote = not in_single_quote
+        elif char == '"' and (i == 0 or sql_clean[i-1] != '\\'):
+            in_double_quote = not in_double_quote
+        elif char == ';' and not in_single_quote and not in_double_quote:
+            # Semicolon outside string quotes: check if there's anything after it
+            remaining = sql_clean[i+1:].strip()
+            if remaining:
+                # If there are additional non-whitespace characters, reject multi-statement
+                return False
+        i += 1
+
+    # 4. Check for destructive/modifying keywords outside of string literals
+    sql_no_strings = re.sub(r"'[^'\\]*(?:\\.[^'\\]*)*'", '', sql_clean)
+    sql_no_strings = re.sub(r'"[^"\\]*(?:\\.[^"\\]*)*"', '', sql_no_strings)
+
+    destructive_keywords = [
+        r'\bINSERT\b', r'\bUPDATE\b', r'\bDELETE\b', r'\bDROP\b', r'\bALTER\b',
+        r'\bCREATE\b', r'\bTRUNCATE\b', r'\bREPLACE\b', r'\bINTO\b', r'\bGRANT\b',
+        r'\bREVOKE\b', r'\bCOPY\b'
+    ]
+    for kw in destructive_keywords:
+        if re.search(kw, sql_no_strings, re.IGNORECASE):
+            return False
+
+    # 4.5. Check for unsafe function calls (match words immediately followed by '(')
+    func_calls = re.findall(r'\b([a-zA-Z0-9_]+)\(', sql_no_strings)
+    safe_funcs = {"sum", "avg", "count", "min", "max", "date_trunc", "coalesce", "round", "now", "date", "concat", "extract"}
+    for func in func_calls:
+        if func.lower() not in safe_funcs:
+            return False
+
+    # 5. Table Whitelisting
+    allowed_tables = {"products", "sales_records"}
+    
+    # Extract potential CTE names (WITH cte_name AS ...)
+    cte_names = set()
+    with_match = re.search(r'\bWITH\s+([a-zA-Z0-9_]+)\s+AS\b', sql_no_strings, re.IGNORECASE)
+    if with_match:
+        cte_names.add(with_match.group(1).lower())
+        # Find subsequent comma-separated CTE names
+        extra_ctes = re.findall(r',\s*([a-zA-Z0-9_]+)\s+AS\b', sql_no_strings, re.IGNORECASE)
+        for name in extra_ctes:
+            cte_names.add(name.lower())
+
+    all_allowed = allowed_tables.union(cte_names)
+
+    # Find table targets in FROM and JOIN clauses
+    matches = re.finditer(
+        r'\b(?:FROM|JOIN)\s+(?:ONLY\s+)?([a-zA-Z0-9_"`]+)(?:\.([a-zA-Z0-9_"`]+))?', 
+        sql_no_strings, 
+        re.IGNORECASE
+    )
+    
+    has_allowed_table = False
+    for match in matches:
+        schema_or_table = match.group(1).lower()
+        table_name = match.group(2).lower() if match.group(2) else schema_or_table
+        table_name = table_name.replace('"', '').replace('`', '')
+        if table_name.startswith('('):
+            continue
+        if table_name not in all_allowed:
+            return False
+        if table_name in allowed_tables:
+            has_allowed_table = True
+
+    # Extract comma-separated tables in FROM clause using non-greedy search up to SQL boundaries
+    from_match = re.search(
+        r'\bFROM\s+(.+?)(?:\bJOIN\b|\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|\bUNION\b|;|\)|$)', 
+        sql_no_strings, 
+        re.IGNORECASE | re.DOTALL
+    )
+    if from_match:
+        clause = from_match.group(1)
+        parts = clause.split(',')
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+            word_match = re.match(r'^([a-zA-Z0-9_\."`]+)', part)
+            if word_match:
+                full_name = word_match.group(1).replace('"', '').replace('`', '').lower()
+                table_name = full_name.split('.')[-1]
+                if table_name.startswith('(') or table_name in {"select", "values"} or table_name.isdigit():
+                    continue
+                if table_name not in all_allowed:
+                    return False
+                if table_name in allowed_tables:
+                    has_allowed_table = True
+
+    return has_allowed_table
+
 
 
 
@@ -52,7 +183,7 @@ def db_insert_workflow(query: str) -> int:
         return workflow_id
     except Exception as e:
         print(f"[ERROR] Failed to insert workflow: {e}")
-        return 0
+        raise RuntimeError(f"Failed to initialize workflow in database: {str(e)}")
     finally:
         conn.close()
 
@@ -67,7 +198,7 @@ def db_update_workflow(workflow_id: int, status: str, tokens: int, latency: int)
             cur.execute(
                 """
                 UPDATE agent_workflows
-                SET status = %s, tokens_used = %s, latency_ms = %s
+                SET status = %s, tokens_used = %s, latency_ms = %s, updated_at = NOW()
                 WHERE id = %s;
                 """,
                 (status, tokens, latency, workflow_id)
@@ -175,15 +306,29 @@ SQL:"""
 
 
 def execute_sql_node(state: AgentState) -> AgentState:
-    """Execute generated SQL against Supabase database."""
+    """Execute generated SQL against Supabase database with validation and security guards."""
     if state.get("error"):
         return state
 
-    print(f"[Agent] Executing SQL: {state['sql']}")
+    sql_to_run = state["sql"]
+    print(f"[Agent] Validating and Executing SQL: {sql_to_run}")
+
+    # 1. SQL Injection Guard / Whitelist Table Validation
+    if not validate_sql(sql_to_run):
+        error_msg = "Security Block: SQL statement failed security verification. Only single-statement SELECT queries on whitelisted tables (products, sales_records) are permitted."
+        print(f"[Agent Error] {error_msg}")
+        state["error"] = error_msg
+        db_insert_step(state["workflow_id"], "execute_sql", sql_to_run, error_msg, False)
+        return state
+
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(state["sql"])
+            # 2. PostgreSQL Session Level Guards
+            cur.execute("SET default_transaction_read_only = on;")
+            cur.execute("SET statement_timeout = 10000;")
+            
+            cur.execute(sql_to_run)
             
             # If it's a SELECT query, fetch results
             if cur.description:
@@ -194,18 +339,20 @@ def execute_sql_node(state: AgentState) -> AgentState:
                 results = [{"status": "success", "rowcount": cur.rowcount}]
                 
         state["query_results"] = results
+        # 3. Serialize output safely handling Decimal/datetime with AgentJSONEncoder
+        serialized_results = json.dumps(results, cls=AgentJSONEncoder)
         db_insert_step(
             state["workflow_id"], 
             "execute_sql", 
-            state["sql"], 
-            json.dumps(results), 
+            sql_to_run, 
+            serialized_results, 
             True
         )
     except Exception as e:
         error_msg = f"SQL Execution Failed: {str(e)}"
         print(f"[Agent Error] {error_msg}")
         state["error"] = error_msg
-        db_insert_step(state["workflow_id"], "execute_sql", state["sql"], error_msg, False)
+        db_insert_step(state["workflow_id"], "execute_sql", sql_to_run, error_msg, False)
     finally:
         conn.close()
         
@@ -219,7 +366,13 @@ def write_sheets_node(state: AgentState) -> AgentState:
 
     # If no results to write, skip sheets write but log it
     if not state["query_results"]:
-        db_insert_step(state["workflow_id"], "write_sheets", None, "No data to write", True)
+        structured_result = json.dumps({
+            "status": "success",
+            "sheet_url": state["sheet_url"],
+            "rows": 0,
+            "message": "No data to write"
+        })
+        db_insert_step(state["workflow_id"], "write_sheets", None, structured_result, True)
         return state
 
     print(f"[Agent] Writing results to Google Sheets: {state['sheet_url']}")
@@ -227,11 +380,18 @@ def write_sheets_node(state: AgentState) -> AgentState:
         # Pass raw query results directly to the dynamic sheet logger
         final_sheet_url = append_data_to_sheet(state["sheet_url"], state["query_results"])
         state["sheet_url"] = final_sheet_url
+        
+        structured_result = json.dumps({
+            "status": "success",
+            "sheet_url": final_sheet_url,
+            "rows": len(state["query_results"]),
+            "message": f"Successfully appended {len(state['query_results'])} rows to Google Sheet: {final_sheet_url}"
+        })
         db_insert_step(
             state["workflow_id"], 
             "write_sheets", 
             None, 
-            f"Successfully appended {len(state['query_results'])} rows to Google Sheet: {final_sheet_url}", 
+            structured_result, 
             True
         )
             
@@ -303,7 +463,7 @@ def draft_discord_node(state: AgentState) -> AgentState:
             parsed_summary = json.loads(summary_text)
             title = parsed_summary.get("title", "📊 รายงานข้อมูล (Data Report)")
             summary_desc = parsed_summary.get("description", str(parsed_summary))
-        except:
+        except (json.JSONDecodeError, TypeError, KeyError):
             title = "📊 รายงานข้อมูล (Data Report)"
             summary_desc = summary_text
         
@@ -323,7 +483,7 @@ def draft_discord_node(state: AgentState) -> AgentState:
                     "footer": {
                         "text": "AutoAgent-Dashboard System"
                     },
-                    "timestamp": datetime.utcnow().isoformat() + "Z"
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
             ]
         }
@@ -394,6 +554,9 @@ def run_data_agent(query: str, custom_sheet_url: Optional[str] = None) -> Dict[s
     
     # Run graph
     print(f"[Workflow] Launching agent graph for Workflow ID: {workflow_id}...")
-    final_state = graph.invoke(initial_state)
-    
-    return final_state
+    try:
+        final_state = graph.invoke(initial_state)
+        return final_state
+    except Exception as e:
+        db_update_workflow(workflow_id, "failed", 0, 0)
+        raise e

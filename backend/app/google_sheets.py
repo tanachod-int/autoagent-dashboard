@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import gspread
 from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
@@ -66,11 +66,17 @@ def append_data_to_sheet(sheet_identifier: str, data: list[dict]) -> str:
         except gspread.exceptions.SpreadsheetNotFound:
             # Create a new spreadsheet if not found by title
             spreadsheet = client.create(sheet_identifier)
-            # Try to share it publicly as reader so user can access it
-            try:
-                spreadsheet.share('', perm_type='anyone', role='reader')
-            except Exception as share_error:
-                print(f"[WARNING] Failed to share spreadsheet publicly: {share_error}")
+            # Share only with specified email addresses in ALLOWED_SHARE_EMAILS env variable
+            share_emails = os.getenv("ALLOWED_SHARE_EMAILS")
+            if share_emails:
+                for email in share_emails.split(","):
+                    email = email.strip()
+                    if email:
+                        try:
+                            spreadsheet.share(email, perm_type='user', role='reader')
+                            print(f"[INFO] Shared spreadsheet with {email}")
+                        except Exception as share_error:
+                            print(f"[WARNING] Failed to share spreadsheet with {email}: {share_error}")
                 
     if not data:
         return spreadsheet.url
@@ -109,26 +115,52 @@ def append_data_to_sheet(sheet_identifier: str, data: list[dict]) -> str:
         except gspread.exceptions.WorksheetNotFound:
             sheet = spreadsheet.add_worksheet(title=tab_title, rows="1000", cols="20")
             
-    # Overwrite Mode: clear sheet and append fresh headers
-    sheet.clear()
-    sheet.append_row(headers)
+    # Append Mode with schema reconciliation:
+    # 1. Retrieve existing headers from the sheet (strip whitespaces)
+    existing_headers = [h.strip() for h in sheet.row_values(1) if h.strip()]
+    
+    if not existing_headers:
+        # If empty, initialize sheet headers with query headers
+        existing_headers = headers
+        sheet.append_row(existing_headers)
+    else:
+        # Identify headers in the incoming query that are not in the sheet's existing schema
+        new_headers = [h for h in headers if h not in existing_headers]
+        if new_headers:
+            # We want to add new headers before "Logged At" if it exists, otherwise at the end
+            if "Logged At" in existing_headers:
+                existing_headers.remove("Logged At")
+            existing_headers.extend([h for h in new_headers if h != "Logged At"])
+            existing_headers.append("Logged At")
             
-    # Prepare rows
-    logged_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Update the headers row in the sheet
+            sheet.update("A1", [existing_headers])
+            
+    # Prepare rows matching the order of existing_headers
+    logged_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     rows_to_append = []
     
     for item in data:
         row = []
-        for k in keys:
-            val = item.get(k, "")
-            # format type representation
+        for header in existing_headers:
+            if header == "Logged At":
+                row.append(logged_at)
+                continue
+                
+            # Map the header title back to the query dict key (e.g. "Stock Quantity" -> "stock_quantity")
+            matched_key = None
+            for k in keys:
+                if k.replace("_", " ").title() == header:
+                    matched_key = k
+                    break
+                    
+            val = item.get(matched_key, "") if matched_key else ""
             if isinstance(val, float):
                 row.append(float(val))
             elif isinstance(val, int) and not isinstance(val, bool):
                 row.append(int(val))
             else:
                 row.append(str(val))
-        row.append(logged_at)
         rows_to_append.append(row)
         
     # Append rows if data is not empty
