@@ -75,3 +75,4 @@ htmlcov/
 *.log
 *.tmp
 *.temp
+*.tsbuildinfo
